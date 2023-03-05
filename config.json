@@ -10,6 +10,8 @@
   "modal_template_state": { "clear": 30, "sleep": 2, "allTeams": true },
   "task_location": "workspace_tasks",
   "headless": true,
+  "release": { "version": "v0.0.1", "name": "init" },
+  "slug": "sl/archive-old-projects",
   "poster": "https://user-images.githubusercontent.com/115161827/215558057-ca96a7e2-c243-4232-8133-8cab6b42d904.png",
   "icon": "https://user-images.githubusercontent.com/115161827/215558050-d98cfff3-854c-4af8-9d77-942f6212a243.png",
   "icon_cover": true
