@@ -1,0 +1,42 @@
+<div>
+  <sly-card>
+    <div style="margin: 15px 10px 0 0">
+      <sly-field
+        title="Choose team to start cleaning:"
+        style="margin: 5px 10px 0 0"
+      >
+        <el-checkbox v-model="state.allTeams">all teams</el-checkbox>
+        <sly-select-team-workspace
+          v-if="!state.allTeams"
+          :team-id.sync="state.teamId"
+          :options="{showWorkspace: false, showLabel: false}"
+        ></sly-select-team-workspace>
+      </sly-field>
+      <sly-field
+        title="Choose period"
+        description="Enter count of days. Files older than this period will be deleted:"
+        style="margin: 25px 10px 0 0"
+      >
+        <el-input-number
+          v-model="state.clear"
+          :min="1"
+          :max="90"
+          show-input
+        ></el-input-number>
+      </sly-field>
+
+      <sly-field
+        title="Sleep time"
+        description="Enter count of days to pause before the next cleaning run (days):"
+        style="margin: 25px 10px 5px 0"
+      >
+        <el-input-number
+          v-model="state.sleep"
+          :min="1"
+          :max="90"
+          show-input
+        ></el-input-number>
+      </sly-field>
+    </div>
+  </sly-card>
+</div>
