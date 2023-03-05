@@ -41,7 +41,6 @@ def main():
         for team_info in teams_infos:
             team_id = team_info[0]
             team_name = team_info[1]
-            team_id = 443  # TODO my gebug!!!
             workspaces_info = api.workspace.get_list(team_id)
 
             for workspace_info in workspaces_info:
