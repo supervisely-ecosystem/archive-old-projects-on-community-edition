@@ -3,6 +3,9 @@ from datetime import datetime, timedelta
 import supervisely as sly
 from supervisely.io.fs import archive_directory, remove_dir, silent_remove
 from dotenv import load_dotenv
+import dropbox
+import requests
+from dropbox_content_hasher import StreamHasher, DropboxContentHasher
 
 
 if sly.is_development():
@@ -18,23 +21,90 @@ del_date = datetime.now() - timedelta(days=days_storage)
 gb_format = 1024 * 1024 * 1024
 storage_dir = sly.app.get_data_dir()
 
+chunk_size = 4 * 1024 * 1024
+
+refresh_token = str(os.environ["refresh_token"])
+app_key = str(os.environ["app_key"])
+app_secret = str(os.environ["app_secret"])
+
+dbx = dropbox.Dropbox(
+    oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
+)
+
 
 def sort_by_date(projects_info):
     projects_to_del = {}
     for project_info in projects_info:
-        project_date = project_info.updated
+        project_date = project_info.updated_at
+        project_date = datetime.strptime(project_date, "%Y-%m-%dT%H:%M:%S.%fZ")
         if project_date < del_date:
             projects_to_del[project_info.id] = project_info.name
 
     return projects_to_del
 
 
-def upload_arch_to_dropbox(archive_path):
-    pass
+def upload_as_session_to_dropbox(archive_path, name):
+    with open(archive_path, "rb") as archive:
+        file_size = os.path.getsize(archive_path)
+        name = str(name)
+        upload_path = "/{}.tar".format(name)
+
+        hasher = DropboxContentHasher()
+        wrapped_archive = StreamHasher(archive, hasher)
+
+        session_start_result = dbx.files_upload_session_start(
+            wrapped_archive.read(chunk_size)
+        )
+
+        sly.logger.info("Uploading archive '{}' in stream mode started".format(name))
+
+        session_id = session_start_result.session_id
+
+        cursor = dropbox.files.UploadSessionCursor(
+            session_id=session_id, offset=archive.tell()
+        )
+
+        commit = dropbox.files.CommitInfo(path=upload_path)
+
+        while archive.tell() < file_size:
+            if (file_size - archive.tell()) <= chunk_size:
+                wrapped_archive = StreamHasher(archive, hasher)
+                dbx.files_upload_session_finish(
+                    wrapped_archive.read(chunk_size), cursor, commit
+                )
+                sly.logger.info("Uploading archive '{}' finished".format(name))
+            else:
+                try:
+                    wrapped_archive = StreamHasher(archive, hasher)
+                    dbx.files_upload_session_append_v2(
+                        wrapped_archive.read(chunk_size), cursor
+                    )
+                    cursor.offset = archive.tell()
+                except dropbox.exceptions.ApiError as e:
+                    if e.error.is_conflict():
+                        sly.logger.warning(
+                            "Session with ID:{} expired. Starting new one".format(
+                                session_id
+                            )
+                        )
+                        session_id = e.error.get_conflict_value().session_id
+                        cursor = dropbox.files.UploadSessionCursor(
+                            session_id=session_id, offset=archive.tell()
+                        )
+                        wrapped_archive = StreamHasher(archive, hasher)
+                        dbx.files_upload_session_append_v2(
+                            wrapped_archive.read(chunk_size), cursor
+                        )
+                        cursor.offset = archive.tell()
+
+        conten_thash = dbx.files_get_metadata(upload_path).content_hash
+        local_hash = hasher.hexdigest()
+        assert conten_thash == local_hash
+
+        return upload_path
 
 
 def main():
-
     while True:
         teams_infos = api.team.get_list()
         sly.logger.info("Start archiving old projects")
@@ -51,23 +121,54 @@ def main():
                 projects_to_del = sort_by_date(projects_info)
 
                 sly.logger.info(
-                    "Check old projects for {} team, {} workspace".format(team_name, workspace_name)
+                    "Check old projects for {} team, {} workspace".format(
+                        team_name, workspace_name
+                    )
                 )
 
                 for project_id in projects_to_del.keys():
-                    dest_dir = os.path.join(storage_dir, str(project_id))
-                    sly.Project.download(api, project_id=project_id, dest_dir=dest_dir)
-                    archive_path = dest_dir + ".tar"
-                    archive_directory(dest_dir, archive_path)
-                    remove_dir(dest_dir)
-                    link_to_restore = upload_arch_to_dropbox(archive_path)  # TODO
-                    sly.logger.info(
-                        "Project with name {} was archived, link to restore: {}".format(
-                            projects_to_del[project_id], link_to_restore
+                    project_type = api.project.get_info_by_id(project_id).type
+                    if project_type == "images":
+                        dest_dir = os.path.join(storage_dir, str(project_id))
+                        sly.logger.info(
+                            "Start downloading data for project ID: {} ".format(
+                                project_id
+                            )
                         )
-                    )
-                    api.project.remove(project_id)
-                    silent_remove(archive_path)  # or move to backup?
+                        sly.Project.download(
+                            api, project_id=project_id, dest_dir=dest_dir
+                        )
+                        archive_path = dest_dir + ".tar"
+                        archive_directory(dest_dir, archive_path)
+                        remove_dir(dest_dir)
+
+                        while True:
+                            try:
+                                link_to_restore = upload_as_session_to_dropbox(
+                                    archive_path, project_id
+                                )
+                                break
+                            except requests.exceptions.ConnectionError:
+                                sly.logger.warning(
+                                    "Connection lost while uploading archive {}".format(
+                                        project_id
+                                    )
+                                )
+                                time.sleep(5)
+
+                        sly.logger.info(
+                            "Project with name {} was archived, link to restore: {}".format(
+                                projects_to_del[project_id], link_to_restore
+                            )
+                        )
+
+                        api.project.remove(
+                            project_id
+                        )  # replace with api call that deletes bypassing trash bin
+
+                        silent_remove(archive_path)  # or move to backup?
+
+                    # add processing for other types
 
         time.sleep(sleep_time)
 
