@@ -21,7 +21,7 @@ del_date = datetime.now() - timedelta(days=days_storage)
 gb_format = 1024 * 1024 * 1024
 storage_dir = sly.app.get_data_dir()
 
-chunk_size = 4 * 1024 * 1024
+chunk_size = 48 * 1024 * 1024
 
 refresh_token = str(os.environ["refresh_token"])
 app_key = str(os.environ["app_key"])
@@ -43,9 +43,13 @@ def sort_by_date(projects_info):
     return projects_to_del
 
 
-def upload_as_session_to_dropbox(archive_path, name):
+def upload_as_session_to_dropbox(archive_path, name, chunk_size):
     with open(archive_path, "rb") as archive:
         file_size = os.path.getsize(archive_path)
+
+        if chunk_size > file_size:
+            chunk_size = file_size // 2
+
         name = str(name)
         upload_path = "/{}.tar".format(name)
 
@@ -145,7 +149,7 @@ def main():
                         while True:
                             try:
                                 link_to_restore = upload_as_session_to_dropbox(
-                                    archive_path, project_id
+                                    archive_path, project_id, chunk_size
                                 )
                                 break
                             except requests.exceptions.ConnectionError:
