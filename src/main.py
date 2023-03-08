@@ -22,6 +22,7 @@ gb_format = 1024 * 1024 * 1024
 storage_dir = sly.app.get_data_dir()
 
 chunk_size = 48 * 1024 * 1024
+multiplicity = 4 * 1024 * 1024
 
 refresh_token = str(os.environ["refresh_token"])
 app_key = str(os.environ["app_key"])
@@ -48,7 +49,7 @@ def upload_as_session_to_dropbox(archive_path, name, chunk_size):
         file_size = os.path.getsize(archive_path)
 
         if chunk_size > file_size:
-            chunk_size = file_size // 2
+            chunk_size = (file_size // 2) // multiplicity * multiplicity
 
         name = str(name)
         upload_path = "/{}.tar".format(name)
