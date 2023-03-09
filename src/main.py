@@ -21,16 +21,26 @@ del_date = datetime.now() - timedelta(days=days_storage)
 gb_format = 1024 * 1024 * 1024
 storage_dir = sly.app.get_data_dir()
 
+# variables for work with dropbox
+local_env_path = os.path.join(storage_dir, "dropbox.env")
+remote_env_path = os.environ["context.slyFile"]
 chunk_size = 48 * 1024 * 1024
 multiplicity = 4 * 1024 * 1024
 
-refresh_token = str(os.environ["refresh_token"])
-app_key = str(os.environ["app_key"])
-app_secret = str(os.environ["app_secret"])
 
-dbx = dropbox.Dropbox(
-    oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
-)
+def auth_to_dropbox(team_id, remote_env_path, local_env_path):
+    sly.logger.info("Connecting to Dropbox...")
+    api.file.download(team_id, remote_env_path, local_env_path)
+    load_dotenv(local_env_path)
+    refresh_token = str(os.environ["refresh_token"])
+    app_key = str(os.environ["app_key"])
+    app_secret = str(os.environ["app_secret"])
+    load_dotenv
+    dbx = dropbox.Dropbox(
+        oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
+    )
+    sly.logger.info("Successfully connected")
+    return dbx
 
 
 def sort_by_date(projects_info):
@@ -44,7 +54,7 @@ def sort_by_date(projects_info):
     return projects_to_del
 
 
-def upload_as_session_to_dropbox(archive_path, name, chunk_size):
+def upload_as_session_to_dropbox(archive_path, name, chunk_size, dbx):
     with open(archive_path, "rb") as archive:
         file_size = os.path.getsize(archive_path)
 
@@ -118,6 +128,8 @@ def main():
             team_name = team_info[1]
             workspaces_info = api.workspace.get_list(team_id)
 
+            dbx = auth_to_dropbox(team_id, remote_env_path, local_env_path)
+
             for workspace_info in workspaces_info:
                 workspace_id = workspace_info[0]
                 workspace_name = workspace_info[1]
@@ -150,7 +162,7 @@ def main():
                         while True:
                             try:
                                 link_to_restore = upload_as_session_to_dropbox(
-                                    archive_path, project_id, chunk_size
+                                    archive_path, project_id, chunk_size, dbx
                                 )
                                 break
                             except requests.exceptions.ConnectionError:
