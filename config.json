@@ -7,7 +7,7 @@
   "docker_image": "supervisely/base-py-sdk:6.69.67",
   "main_script": "src/main.py",
   "modal_template": "src/modal.html",
-  "modal_template_state": { "clear": 30, "sleep": 2, "allTeams": true },
+  "modal_template_state": { "clear": 30, "sleep": 2, "allTeams": false },
   "task_location": "workspace_tasks",
   "headless": true,
   "release": { "version": "v0.0.1", "name": "init" },
