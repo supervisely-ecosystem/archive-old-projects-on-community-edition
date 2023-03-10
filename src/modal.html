@@ -1,34 +1,37 @@
 <div>
   <sly-card>
-    <div style="margin: 15px 10px 0 0">
+    <div style="margin: 10px 10px 0 0">
       <sly-field
-        title="Choose team to start cleaning:"
-        style="margin: 5px 10px 0 0"
+        title="Choose team"
+        description="For which you want to archive projects"
+        style="margin: 6px 10px 0x 0"
       >
-        <el-checkbox v-model="state.allTeams">all teams</el-checkbox>
         <sly-select-team-workspace
           v-if="!state.allTeams"
           :team-id.sync="state.teamId"
           :options="{showWorkspace: false, showLabel: false}"
         ></sly-select-team-workspace>
-      </sly-field>
+        <el-checkbox style="margin: 10px 10px 0 8px" v-model="state.allTeams">All teams</el-checkbox>
+      </sly-field>  
+      
+      
       <sly-field
-        title="Choose period"
-        description="Enter count of days. Files older than this period will be deleted:"
-        style="margin: 25px 10px 0 0"
+        title="Project age"
+        description="Enter count of days to archive Projects older than this period:"
+        style="margin: 16px 10px 0 0"
       >
         <el-input-number
           v-model="state.clear"
           :min="1"
-          :max="90"
+          :max="1095"
           show-input
         ></el-input-number>
       </sly-field>
 
       <sly-field
         title="Sleep time"
-        description="Enter count of days to pause before the next cleaning run (days):"
-        style="margin: 25px 10px 5px 0"
+        description="Enter count of days to pause before the next archiving run:"
+        style="margin: 16px 10px 10px 0"
       >
         <el-input-number
           v-model="state.sleep"
