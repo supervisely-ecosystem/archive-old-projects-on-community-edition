@@ -12,7 +12,29 @@
           :options="{showWorkspace: false, showLabel: false}"
         ></sly-select-team-workspace>
         <el-checkbox style="margin: 10px 10px 0 8px" v-model="state.allTeams">All teams</el-checkbox>
-      </sly-field>  
+      </sly-field>
+      <sly-field
+        v-if="!state.loadFromFile"
+        title="Choose authentication file"
+        description="File name must be 'dropbox.env', contains tokens and stores in Team Files"
+        style="margin: 16px 10px 0 0"
+      >
+        <div v-if="!state.fileSelected">
+          <sly-select-team-files
+            :team-id.sync="state.teamId"
+            :options="{multipleSelection: false, selectionFileType: 'file', hideEmptyTable: true, hideHeader: true}"
+            >
+          </sly-select-team-files>
+          <el-button
+            style="margin: 10px 10px 0 10px" 
+            type="primary" 
+            size="mini"
+            @click="state.fileSelected = true">Save choice</el-button>
+        </div>
+        <div v-if="state.fileSelected">
+          File dropbox.env chosen
+        </div>
+      </sly-field>
       
       
       <sly-field
@@ -21,7 +43,7 @@
         style="margin: 16px 10px 0 0"
       >
         <el-input-number
-          v-model="state.clear"
+          v-model="state.age"
           :min="1"
           :max="1095"
           show-input
