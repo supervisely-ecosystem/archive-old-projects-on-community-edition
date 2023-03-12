@@ -15,27 +15,28 @@ if sly.is_development():
 
 api = sly.Api.from_env()
 
-days_storage = int(os.environ["modal.state.clear"])
-sleep_time = int(os.environ["modal.state.sleep"]) * 86400
+days_storage = int(os.environ["modal.state.age"])
+sleep_days = int(os.environ["modal.state.sleep"])
+sleep_time = sleep_days * 86400
 del_date = datetime.now() - timedelta(days=days_storage)
 gb_format = 1024 * 1024 * 1024
 storage_dir = sly.app.get_data_dir()
 
 # variables for work with dropbox
-local_env_path = os.path.join(storage_dir, "dropbox.env")
-remote_env_path = os.environ["context.slyFile"]
 chunk_size = 48 * 1024 * 1024
 multiplicity = 4 * 1024 * 1024
 
 
-def auth_to_dropbox(team_id, remote_env_path, local_env_path):
+def auth_to_dropbox():
     sly.logger.info("Connecting to Dropbox...")
-    api.file.download(team_id, remote_env_path, local_env_path)
+    initial_team_id = sly.env.team_id()
+    local_env_path = os.path.join(storage_dir, "dropbox.env")
+    remote_env_path = os.environ["context.slyFile"]
+    api.file.download(initial_team_id, remote_env_path, local_env_path)
     load_dotenv(local_env_path)
     refresh_token = str(os.environ["refresh_token"])
     app_key = str(os.environ["app_key"])
     app_secret = str(os.environ["app_secret"])
-    load_dotenv
     dbx = dropbox.Dropbox(
         oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
     )
@@ -120,23 +121,19 @@ def upload_as_session_to_dropbox(archive_path, name, chunk_size, dbx):
 
 
 def main():
+    dbx = auth_to_dropbox()
     while True:
-        teams_infos = api.team.get_list()
         sly.logger.info("Start archiving old projects")
+        teams_infos = api.team.get_list()
         for team_info in teams_infos:
             team_id = team_info[0]
             team_name = team_info[1]
             workspaces_info = api.workspace.get_list(team_id)
-
-            dbx = auth_to_dropbox(team_id, remote_env_path, local_env_path)
-
             for workspace_info in workspaces_info:
                 workspace_id = workspace_info[0]
                 workspace_name = workspace_info[1]
-
                 projects_info = api.project.get_list(workspace_id)
                 projects_to_del = sort_by_date(projects_info)
-
                 sly.logger.info(
                     "Check old projects for {} team, {} workspace".format(
                         team_name, workspace_name
@@ -187,6 +184,11 @@ def main():
 
                     # add processing for other types
 
+        sly.logger.info(
+            "Task accomplished, standby mode activated. The next check will be in {} day(s)".format(
+                sleep_days
+            )
+        )
         time.sleep(sleep_time)
 
 
