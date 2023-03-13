@@ -6,7 +6,8 @@
 <p align='center'>
   <a href='#overview'>Overview</a> •
   <a href='#Preparation'>Preparation</a> •
-  <a href='#How to Run'>How to Run</a>
+  <a href='#How to Run'>How to Run</a> •
+  <a href='#Release notes'>Release notes</a>
 </p>
 
 [![](https://img.shields.io/badge/slack-chat-green.svg?logo=slack)](https://supervise.ly/slack)
@@ -48,3 +49,7 @@ After the archiving process is complete, the application will continue to run in
 5. Set the number of days for the project age. Any project older than this period will be archived.
 6. Set the sleep time in days after which the application will resume its work.
 7. Finally, run the application.
+
+## Release notes
+#### v0.0.1
+ - Works only with project type: Image
