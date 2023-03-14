@@ -5,9 +5,9 @@
 
 <p align='center'>
   <a href='#overview'>Overview</a> •
-  <a href='#Preparation'>Preparation</a> •
-  <a href='#How to Run'>How to Run</a> •
-  <a href='#Release notes'>Release notes</a>
+  <a href='#preparation'>Preparation</a> •
+  <a href='#how-to-run'>How to Run</a> •
+  <a href='#release-notes'>Release notes</a>
 </p>
 
 [![](https://img.shields.io/badge/slack-chat-green.svg?logo=slack)](https://supervise.ly/slack)
@@ -32,12 +32,15 @@ After the archiving process is complete, the application will continue to run in
    - Metadata: read and write
    - Content: read and write 
 4. Create a file named "**dropbox.env**" locally and enter your keys from your App Settings:
-    ~~~
+   
+    ```
     app_key="key"
     app_secret="key"
     refresh_token="key"
-    ~~~
-    `refresh_token` can be obtained using [this solution](https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/Get-refresh-token-from-access-token/td-p/596739)
+    ```
+
+    `refresh_token` 
+    can be obtained using [this solution](https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/Get-refresh-token-from-access-token/td-p/596739)
 
 
 ## How to Run
