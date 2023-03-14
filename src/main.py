@@ -1,4 +1,5 @@
 import os, time
+from distutils.util import strtobool
 from datetime import datetime, timedelta
 import supervisely as sly
 from supervisely.io.fs import archive_directory, remove_dir, silent_remove
@@ -143,11 +144,23 @@ def remove_from_ecosystem(project_id, hash_compare_results, link_to_restore):
         )
 
 
+def choose_teams():
+    if not bool(strtobool(os.environ["modal.state.allTeams"])):
+        team_id = os.environ["modal.state.teamId"]
+        teams_infos = [api.team.get_info_by_id(team_id)]
+    else:
+        teams_infos = api.team.get_list()
+    team_lists = []
+    [team_lists.append(team[1]) for team in teams_infos]
+    sly.logger.info(f"This {len(team_lists)} team(s) will be processed: {team_lists}")
+    return teams_infos
+
+
 def main():
     dbx = auth_to_dropbox()
     while True:
         sly.logger.info("Starting to archive old projects")
-        teams_infos = api.team.get_list()
+        teams_infos = choose_teams()
         for team_info in teams_infos:
             team_id = team_info[0]
             team_name = team_info[1]
