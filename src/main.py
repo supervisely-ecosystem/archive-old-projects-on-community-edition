@@ -28,13 +28,19 @@ chunk_size = 48 * 1024 * 1024
 multiplicity = 4 * 1024 * 1024
 
 
-def auth_to_dropbox():
-    sly.logger.info("Connecting to Dropbox...")
+def download_env_file_to_app_dir():
     initial_team_id = sly.env.team_id()
-    local_env_path = os.path.join(storage_dir, "dropbox.env")
-    remote_env_path = os.environ["context.slyFile"]
-    api.file.download(initial_team_id, remote_env_path, local_env_path)
-    load_dotenv(local_env_path)
+    team_files_env_file_path = os.environ["context.slyFile"]
+    env_file_name = sly.env.file()
+    app_env_file_path = os.path.join(storage_dir, env_file_name)
+    api.file.download(initial_team_id, team_files_env_file_path, app_env_file_path)
+    return app_env_file_path
+
+
+def auth_to_dropbox():
+    app_env_file_path = download_env_file_to_app_dir()
+    sly.logger.info("Connecting to Dropbox...")
+    load_dotenv(app_env_file_path)
     refresh_token = str(os.environ["refresh_token"])
     app_key = str(os.environ["app_key"])
     app_secret = str(os.environ["app_secret"])
