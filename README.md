@@ -6,8 +6,7 @@
 <p align='center'>
   <a href='#overview'>Overview</a> •
   <a href='#preparation'>Preparation</a> •
-  <a href='#how-to-run'>How to Run</a> •
-  <a href='#release-notes'>Release notes</a>
+  <a href='#how-to-run'>How to Run</a>
 </p>
 
 [![](https://img.shields.io/badge/slack-chat-green.svg?logo=slack)](https://supervise.ly/slack)
@@ -53,6 +52,6 @@ After the archiving process is complete, the application will continue to run in
 6. Set the sleep time in days after which the application will resume its work.
 7. Finally, run the application.
 
-## Release notes
-#### v0.0.1
- - Works only with project type: Image
+The application will check projects, select those that meet the specified criteria based on the date, and process each one sequentially. During processing, a directory named `supervisely_archive_id` will be created in the root directory of Dropbox, where `id` is the number of the task that the application is working on. Project archives named with the project `id` will be uploaded in this directory. 
+If the project size exceeds **348 GB**, the project will be split into parts and uploaded into a created in advance subdirectory that named with the project `id`.
+After processing, the projects in the workspace will be marked as archived, and instead of the data, there will be a link to it on Dropbox.
