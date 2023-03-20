@@ -1,4 +1,4 @@
-import os, time
+import os, time, sys
 from datetime import datetime, timedelta
 from distutils.util import strtobool
 import supervisely as sly
@@ -48,13 +48,47 @@ def auth_to_dropbox():
     app_env_file_path = download_env_file()
     sly.logger.info("Connecting to Dropbox...")
     load_dotenv(app_env_file_path)
-    refresh_token = str(os.environ["refresh_token"])
-    app_key = str(os.environ["app_key"])
-    app_secret = str(os.environ["app_secret"])
-    dbx = dropbox.Dropbox(
-        oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
-    )
-    sly.logger.info("Connected successfully!")
+    try:
+        refresh_token = str(os.environ["refresh_token"])
+        app_key = str(os.environ["app_key"])
+        app_secret = str(os.environ["app_secret"])
+        for key in (refresh_token, app_key, app_secret):
+            if key == "":
+                raise ValueError
+    except KeyError as error:
+        sly.logger.warning(
+            f"WARNING: {app_env_file_path} file does not contain the necessary data: [{error.args[0]}]"
+        )
+        sly.logger.warning(f"WARNING: termination")
+        sys.exit()
+    except ValueError as error:
+        sly.logger.warning(f"WARNING: {app_env_file_path} file contains empty value(s)")
+        sly.logger.warning(f"WARNING: termination")
+        sys.exit()
+
+    try:
+        dbx = dropbox.Dropbox(
+            oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
+        )
+    except dropbox.dropbox_client.BadInputException as error:
+        sly.logger.warning(f"WARNING: {error}")
+        sly.logger.warning(f"WARNING: termination")
+        sys.exit()
+
+    try:
+        dbx.check_user()
+        sly.logger.info("Connected successfully!")
+    except dropbox.exceptions.BadInputError as error:
+        sly.logger.warning(
+            f"WARNING: Authorisation unsuccessful. Check values in {app_env_file_path}"
+        )
+        sly.logger.warning(f"WARNING: termination")
+        sys.exit()
+    except dropbox.exceptions.AuthError as error:
+        sly.logger.warning(f"WARNING: {error.error}")
+        sly.logger.warning(f"WARNING: termination")
+        sys.exit()
+
     return dbx
 
 
@@ -104,8 +138,7 @@ def create_multivolume_archive(temp_dir, storage_dir, max_archive_size):
 
     for file in files:
         if (
-            sum(os.path.getsize(f) for f in current_archive_files)
-            + os.path.getsize(file)
+            sum(os.path.getsize(f) for f in current_archive_files) + os.path.getsize(file)
             > max_archive_size
         ):
             part_num += 1
@@ -137,9 +170,7 @@ def create_folder_on_dropbox(dbx):
         if e.error.get_path().is_conflict():
             sly.logger.info(f"Folder [{folder_path[1:]}] already exists")
         else:
-            sly.logger.warning(
-                f"Error occured while creating [{folder_path[1:]}] folder"
-            )
+            sly.logger.warning(f"Error occured while creating [{folder_path[1:]}] folder")
     return folder_path
 
 
@@ -156,33 +187,25 @@ def upload_via_session_to_dropbox(archive_path, name, chunk_size, dbx, destinati
         hasher = DropboxContentHasher()
         wrapped_archive = StreamHasher(archive, hasher)
 
-        session_start_result = dbx.files_upload_session_start(
-            wrapped_archive.read(chunk_size)
-        )
+        session_start_result = dbx.files_upload_session_start(wrapped_archive.read(chunk_size))
 
         sly.logger.info(f"Uploading started for [{name}] ")
 
         session_id = session_start_result.session_id
 
-        cursor = dropbox.files.UploadSessionCursor(
-            session_id=session_id, offset=archive.tell()
-        )
+        cursor = dropbox.files.UploadSessionCursor(session_id=session_id, offset=archive.tell())
 
         commit = dropbox.files.CommitInfo(path=upload_path)
 
         while archive.tell() < file_size:
             if (file_size - archive.tell()) <= chunk_size:
                 wrapped_archive = StreamHasher(archive, hasher)
-                dbx.files_upload_session_finish(
-                    wrapped_archive.read(chunk_size), cursor, commit
-                )
+                dbx.files_upload_session_finish(wrapped_archive.read(chunk_size), cursor, commit)
                 sly.logger.info(f"Uploading finished for [{name}]")
             else:
                 try:
                     wrapped_archive = StreamHasher(archive, hasher)
-                    dbx.files_upload_session_append_v2(
-                        wrapped_archive.read(chunk_size), cursor
-                    )
+                    dbx.files_upload_session_append_v2(wrapped_archive.read(chunk_size), cursor)
                     cursor.offset = archive.tell()
                 except dropbox.exceptions.ApiError as e:
                     if e.error.is_conflict():
@@ -194,9 +217,7 @@ def upload_via_session_to_dropbox(archive_path, name, chunk_size, dbx, destinati
                             session_id=session_id, offset=archive.tell()
                         )
                         wrapped_archive = StreamHasher(archive, hasher)
-                        dbx.files_upload_session_append_v2(
-                            wrapped_archive.read(chunk_size), cursor
-                        )
+                        dbx.files_upload_session_append_v2(wrapped_archive.read(chunk_size), cursor)
                         cursor.offset = archive.tell()
 
         content_hash = dbx.files_get_metadata(upload_path).content_hash
@@ -259,9 +280,7 @@ def remove_from_ecosystem(project_id, hash_compare_results, link_to_restore):
                 f"Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch."
             )
             for link in link_to_restore:
-                sly.logger.warning(
-                    f"Please check the uploaded part of data at [{link}]"
-                )
+                sly.logger.warning(f"Please check the uploaded part of data at [{link}]")
         else:
             sly.logger.warning(
                 f"Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
@@ -294,12 +313,8 @@ def main():
                     if project_type == "images" and not already_archived:
                         temp_dir = os.path.join(storage_dir, str(project_id))
                         temp_dir = temp_dir.replace("\\", "/")
-                        sly.logger.info(
-                            f"Packing data for a project [ID: {project_id}] "
-                        )
-                        sly.Project.download(
-                            api, project_id=project_id, dest_dir=temp_dir
-                        )
+                        sly.logger.info(f"Packing data for a project [ID: {project_id}] ")
+                        sly.Project.download(api, project_id=project_id, dest_dir=temp_dir)
                         archive_path = temp_dir + ".tar"
 
                         if get_directory_size(temp_dir) >= max_archive_size:
@@ -309,9 +324,7 @@ def main():
                             tars_to_upload = create_multivolume_archive(
                                 temp_dir, storage_dir, max_archive_size
                             )
-                            sly.logger.info(
-                                f"The number of archives: {len(tars_to_upload)}"
-                            )
+                            sly.logger.info(f"The number of archives: {len(tars_to_upload)}")
                         else:
                             archive_directory(temp_dir, archive_path)
                             tars_to_upload = archive_path
@@ -319,9 +332,7 @@ def main():
                         remove_dir(temp_dir)
 
                         if isinstance(tars_to_upload, set):
-                            destination_folder_for_project = (
-                                f"{destination_folder}/{project_id}"
-                            )
+                            destination_folder_for_project = f"{destination_folder}/{project_id}"
                             dbx.files_create_folder_v2(destination_folder_for_project)
                             sly.logger.info(
                                 f"A nested folder has been created with the name: {project_id}"
@@ -348,9 +359,7 @@ def main():
                             f"Archived successfully [ID: {project_id}] [NAME: {projects_to_del[project_id]}] ! Link to restore: {link_to_restore}"
                         )
 
-                        remove_from_ecosystem(
-                            project_id, hash_compare_results, link_to_restore
-                        )
+                        remove_from_ecosystem(project_id, hash_compare_results, link_to_restore)
 
         sly.logger.info(
             f"Task accomplished, standby mode activated. The next check will be in {sleep_days} day(s)"
