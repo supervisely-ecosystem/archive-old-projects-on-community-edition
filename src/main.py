@@ -1,11 +1,17 @@
 import os, time
-from distutils.util import strtobool
 from datetime import datetime, timedelta
+from distutils.util import strtobool
 import supervisely as sly
-from supervisely.io.fs import archive_directory, remove_dir, silent_remove
+from supervisely.io.fs import (
+    archive_directory,
+    remove_dir,
+    silent_remove,
+    get_directory_size,
+)
 from dotenv import load_dotenv
 import dropbox
 import requests
+import tarfile
 from dropbox_content_hasher import StreamHasher, DropboxContentHasher
 
 
@@ -20,15 +26,16 @@ days_storage = int(os.environ["modal.state.age"])
 sleep_days = int(os.environ["modal.state.sleep"])
 sleep_time = sleep_days * 86400
 del_date = datetime.now() - timedelta(days=days_storage)
-gb_format = 1024 * 1024 * 1024
 storage_dir = sly.app.get_data_dir()
 
-# variables for work with dropbox
-chunk_size = 48 * 1024 * 1024
-multiplicity = 4 * 1024 * 1024
+GB = 1024 * 1024 * 1024
+MB = 1024 * 1024
+chunk_size = 48 * MB
+multiplicity = 4 * MB
+max_archive_size = 348 * GB
 
 
-def download_env_file_to_app_dir():
+def download_env_file():
     initial_team_id = sly.env.team_id()
     team_files_env_file_path = os.environ["context.slyFile"]
     env_file_name = sly.env.file()
@@ -38,7 +45,7 @@ def download_env_file_to_app_dir():
 
 
 def auth_to_dropbox():
-    app_env_file_path = download_env_file_to_app_dir()
+    app_env_file_path = download_env_file()
     sly.logger.info("Connecting to Dropbox...")
     load_dotenv(app_env_file_path)
     refresh_token = str(os.environ["refresh_token"])
@@ -49,6 +56,18 @@ def auth_to_dropbox():
     )
     sly.logger.info("Connected successfully!")
     return dbx
+
+
+def choose_teams():
+    if not bool(strtobool(os.environ["modal.state.allTeams"])):
+        team_id = os.environ["modal.state.teamId"]
+        teams_infos = [api.team.get_info_by_id(team_id)]
+    else:
+        teams_infos = api.team.get_list()
+    team_lists = []
+    [team_lists.append(team[1]) for team in teams_infos]
+    sly.logger.info(f"This {len(team_lists)} team(s) will be processed: {team_lists}")
+    return teams_infos
 
 
 def sort_by_date(projects_info):
@@ -62,25 +81,77 @@ def sort_by_date(projects_info):
     return projects_to_del
 
 
-def compare_hashes(hash1, hash2):
+def is_project_archived(project_info):
     try:
-        if hash1 == hash2:
-            return True
-        else:
-            return False
-    except (TypeError, ValueError):
+        project_info.backup_archive["exportedAt"]
+        return True
+    except:
         return False
 
 
-def upload_as_session_to_dropbox(archive_path, name, chunk_size, dbx):
+def create_multivolume_archive(temp_dir, storage_dir, max_archive_size):
+    file_name = temp_dir.split("/")[-1]
+    files = []
+    current_archive_files = []
+    archive_names = set()
+    part_num = 0
+
+    for dirpath, _, filenames in os.walk(temp_dir):
+        for filename in filenames:
+            files.append(os.path.join(dirpath, filename))
+
+    files.sort(key=lambda f: os.path.getsize(f))
+
+    for file in files:
+        if (
+            sum(os.path.getsize(f) for f in current_archive_files)
+            + os.path.getsize(file)
+            > max_archive_size
+        ):
+            part_num += 1
+            archive_name = f"{storage_dir}/{file_name}.part{part_num:03}.tar"
+            archive_names.add(archive_name)
+            with tarfile.open(archive_name, "w") as archive:
+                for f in current_archive_files:
+                    archive.add(f, f.replace(temp_dir, ""))
+            current_archive_files = []
+
+        current_archive_files.append(file)
+
+    part_num += 1
+    archive_name = f"{storage_dir}/{file_name}.part{part_num:03}.tar"
+    archive_names.add(archive_name)
+    with tarfile.open(archive_name, "w") as archive:
+        for f in current_archive_files:
+            archive.add(f, f.replace(temp_dir, ""))
+    return archive_names
+
+
+def create_folder_on_dropbox(dbx):
+    task_id = os.getenv("TASK_ID")
+    folder_path = f"/supervisely_archive_{task_id}"
+    try:
+        sly.logger.info(f"Trying to create folder [{folder_path[1:]}] on Dropbox")
+        dbx.files_create_folder_v2(folder_path)
+    except dropbox.exceptions.ApiError as e:
+        if e.error.get_path().is_conflict():
+            sly.logger.info(f"Folder [{folder_path[1:]}] already exists")
+        else:
+            sly.logger.warning(
+                f"Error occured while creating [{folder_path[1:]}] folder"
+            )
+    return folder_path
+
+
+def upload_via_session_to_dropbox(archive_path, name, chunk_size, dbx, destination):
     with open(archive_path, "rb") as archive:
         file_size = os.path.getsize(archive_path)
 
         if chunk_size > file_size:
-            chunk_size = (file_size // 2) // multiplicity * multiplicity
-
+            # upload_chunk_size = (file_size // 2) // multiplicity * multiplicity
+            chunk_size = file_size // 2
         name = str(name)
-        upload_path = f"/{name}.tar"
+        upload_path = f"{destination}/{name}.tar"
 
         hasher = DropboxContentHasher()
         wrapped_archive = StreamHasher(archive, hasher)
@@ -89,9 +160,7 @@ def upload_as_session_to_dropbox(archive_path, name, chunk_size, dbx):
             wrapped_archive.read(chunk_size)
         )
 
-        sly.logger.info(
-            f"Uploading started for a project [ID: {name}] archive in stream mode"
-        )
+        sly.logger.info(f"Uploading started for [{name}] ")
 
         session_id = session_start_result.session_id
 
@@ -107,9 +176,7 @@ def upload_as_session_to_dropbox(archive_path, name, chunk_size, dbx):
                 dbx.files_upload_session_finish(
                     wrapped_archive.read(chunk_size), cursor, commit
                 )
-                sly.logger.info(
-                    f"Uploading finished for project [ID: '{name}'] archive "
-                )
+                sly.logger.info(f"Uploading finished for [{name}]")
             else:
                 try:
                     wrapped_archive = StreamHasher(archive, hasher)
@@ -138,32 +205,72 @@ def upload_as_session_to_dropbox(archive_path, name, chunk_size, dbx):
         return upload_path, hash_compare_results
 
 
+def upload_entire_file(archive_path, project_id, chunk_size, dbx, destination_folder):
+    while True:
+        try:
+            (upload_path, hash_compare_results,) = upload_via_session_to_dropbox(
+                archive_path,
+                project_id,
+                chunk_size,
+                dbx,
+                destination_folder,
+            )
+            link_to_restore = dbx.sharing_create_shared_link(upload_path).url
+            break
+        except requests.exceptions.ConnectionError:
+            sly.logger.warning(
+                f"Connection lost while uploading project [ID: {project_id}] archive"
+            )
+            time.sleep(5)
+    return link_to_restore, hash_compare_results
+
+
+def upload_volumes(parts, chunk_size, dbx, destination_folder):
+    sorted_parts = sorted(list(parts))
+    hash_compare_results = list()
+    for part in sorted_parts:
+        part_name = part.split("/")[-1].replace(".tar", "")
+        _, hash_compare_result = upload_entire_file(
+            part, part_name, chunk_size, dbx, destination_folder
+        )
+        hash_compare_results.append(hash_compare_result)
+    hash_compare_results = all(hash_compare_results)
+    link_to_restore = dbx.sharing_create_shared_link(destination_folder).url
+    return link_to_restore, hash_compare_results
+
+
+def compare_hashes(hash1, hash2):
+    try:
+        if hash1 == hash2:
+            return True
+        else:
+            return False
+    except (TypeError, ValueError):
+        return False
+
+
 def remove_from_ecosystem(project_id, hash_compare_results, link_to_restore):
     if hash_compare_results:
-        api.project.remove(
-            project_id
-        )  # replace with api call that deletes bypassing trash bin
+        api.project.archive_project(project_id, link_to_restore)
         sly.logger.info(f"Project [ID: {project_id}] removed from Ecosystem")
     else:
-        sly.logger.warning(
-            f"Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
-        )
-
-
-def choose_teams():
-    if not bool(strtobool(os.environ["modal.state.allTeams"])):
-        team_id = os.environ["modal.state.teamId"]
-        teams_infos = [api.team.get_info_by_id(team_id)]
-    else:
-        teams_infos = api.team.get_list()
-    team_lists = []
-    [team_lists.append(team[1]) for team in teams_infos]
-    sly.logger.info(f"This {len(team_lists)} team(s) will be processed: {team_lists}")
-    return teams_infos
+        if isinstance(link_to_restore, set):
+            sly.logger.warning(
+                f"Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch."
+            )
+            for link in link_to_restore:
+                sly.logger.warning(
+                    f"Please check the uploaded part of data at [{link}]"
+                )
+        else:
+            sly.logger.warning(
+                f"Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
+            )
 
 
 def main():
     dbx = auth_to_dropbox()
+    destination_folder = create_folder_on_dropbox(dbx)
     while True:
         sly.logger.info("Starting to archive old projects")
         teams_infos = choose_teams()
@@ -181,33 +288,61 @@ def main():
                 )
 
                 for project_id in projects_to_del.keys():
-                    project_type = api.project.get_info_by_id(project_id).type
-                    if project_type == "images":
-                        dest_dir = os.path.join(storage_dir, str(project_id))
+                    project_info = api.project.get_info_by_id(project_id)
+                    project_type = project_info.type
+                    already_archived = is_project_archived(project_info)
+                    if project_type == "images" and not already_archived:
+                        temp_dir = os.path.join(storage_dir, str(project_id))
+                        temp_dir = temp_dir.replace("\\", "/")
                         sly.logger.info(
                             f"Packing data for a project [ID: {project_id}] "
                         )
                         sly.Project.download(
-                            api, project_id=project_id, dest_dir=dest_dir
+                            api, project_id=project_id, dest_dir=temp_dir
                         )
-                        archive_path = dest_dir + ".tar"
-                        archive_directory(dest_dir, archive_path)
-                        remove_dir(dest_dir)
+                        archive_path = temp_dir + ".tar"
 
-                        while True:
-                            try:
-                                (
-                                    link_to_restore,
-                                    hash_compare_results,
-                                ) = upload_as_session_to_dropbox(
-                                    archive_path, project_id, chunk_size, dbx
-                                )
-                                break
-                            except requests.exceptions.ConnectionError:
-                                sly.logger.warning(
-                                    f"Connection lost while uploading project [ID: {project_id}] archive"
-                                )
-                                time.sleep(5)
+                        if get_directory_size(temp_dir) >= max_archive_size:
+                            sly.logger.info(
+                                "The project takes up more space than the data transfer limits allow, so it will be split into several parts and placed in a separate Dropbox project folder."
+                            )
+                            tars_to_upload = create_multivolume_archive(
+                                temp_dir, storage_dir, max_archive_size
+                            )
+                            sly.logger.info(
+                                f"The number of archives: {len(tars_to_upload)}"
+                            )
+                        else:
+                            archive_directory(temp_dir, archive_path)
+                            tars_to_upload = archive_path
+
+                        remove_dir(temp_dir)
+
+                        if isinstance(tars_to_upload, set):
+                            destination_folder_for_project = (
+                                f"{destination_folder}/{project_id}"
+                            )
+                            dbx.files_create_folder_v2(destination_folder_for_project)
+                            sly.logger.info(
+                                f"A nested folder has been created with the name: {project_id}"
+                            )
+                            link_to_restore, hash_compare_results = upload_volumes(
+                                tars_to_upload,
+                                chunk_size,
+                                dbx,
+                                destination_folder_for_project,
+                            )
+                            for tar in tars_to_upload:
+                                silent_remove(tar)
+                        else:
+                            link_to_restore, hash_compare_results = upload_entire_file(
+                                tars_to_upload,
+                                project_id,
+                                chunk_size,
+                                dbx,
+                                destination_folder,
+                            )
+                            silent_remove(tars_to_upload)
 
                         sly.logger.info(
                             f"Archived successfully [ID: {project_id}] [NAME: {projects_to_del[project_id]}] ! Link to restore: {link_to_restore}"
@@ -216,10 +351,6 @@ def main():
                         remove_from_ecosystem(
                             project_id, hash_compare_results, link_to_restore
                         )
-
-                        silent_remove(archive_path)  # or move to backup?
-
-                    # add processing for other types
 
         sly.logger.info(
             f"Task accomplished, standby mode activated. The next check will be in {sleep_days} day(s)"
