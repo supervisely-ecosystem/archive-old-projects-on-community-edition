@@ -270,20 +270,20 @@ def compare_hashes(hash1, hash2):
         return False
 
 
-def remove_from_ecosystem(project_id, hash_compare_results, link_to_restore):
+def set_project_archived(project_id, hash_compare_results, link_to_restore):
     if hash_compare_results:
-        api.project.archive_project(project_id, link_to_restore)
-        sly.logger.info(f"Project [ID: {project_id}] removed from Ecosystem")
+        api.project.archive(project_id, link_to_restore)
+        sly.logger.info(f"Data of Project [ID: {project_id}] removed from Ecosystem")
     else:
         if isinstance(link_to_restore, set):
             sly.logger.warning(
-                f"Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch."
+                f"Data of Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch."
             )
             for link in link_to_restore:
                 sly.logger.warning(f"Please check the uploaded part of data at [{link}]")
         else:
             sly.logger.warning(
-                f"Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
+                f"Data of Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
             )
 
 
@@ -359,7 +359,7 @@ def main():
                             f"Archived successfully [ID: {project_id}] [NAME: {projects_to_del[project_id]}] ! Link to restore: {link_to_restore}"
                         )
 
-                        remove_from_ecosystem(project_id, hash_compare_results, link_to_restore)
+                        set_project_archived(project_id, hash_compare_results, link_to_restore)
 
         sly.logger.info(
             f"Task accomplished, standby mode activated. The next check will be in {sleep_days} day(s)"
