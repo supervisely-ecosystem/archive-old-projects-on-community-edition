@@ -1,4 +1,4 @@
-import os, time, sys
+import os, time
 from datetime import datetime, timedelta
 from distutils.util import strtobool
 import supervisely as sly
@@ -59,12 +59,10 @@ def auth_to_dropbox():
         sly.logger.warning(
             f"WARNING: {app_env_file_path} file does not contain the necessary data: [{error.args[0]}]"
         )
-        sly.logger.warning(f"WARNING: termination")
-        sys.exit()
+        raise KeyError("See the WARNING message above")
     except ValueError as error:
         sly.logger.warning(f"WARNING: {app_env_file_path} file contains empty value(s)")
-        sly.logger.warning(f"WARNING: termination")
-        sys.exit()
+        raise ValueError("See the WARNING message above")
 
     try:
         dbx = dropbox.Dropbox(
@@ -72,8 +70,9 @@ def auth_to_dropbox():
         )
     except dropbox.dropbox_client.BadInputException as error:
         sly.logger.warning(f"WARNING: {error}")
-        sly.logger.warning(f"WARNING: termination")
-        sys.exit()
+        raise dropbox.dropbox_client.BadInputException(
+            message="See the WARNING message above", request_id=None
+        )
 
     try:
         dbx.check_user()
@@ -82,12 +81,12 @@ def auth_to_dropbox():
         sly.logger.warning(
             f"WARNING: Authorisation unsuccessful. Check values in {app_env_file_path}"
         )
-        sly.logger.warning(f"WARNING: termination")
-        sys.exit()
+        raise dropbox.exceptions.BadInputError(
+            message="See the WARNING message above", request_id=None
+        )
     except dropbox.exceptions.AuthError as error:
         sly.logger.warning(f"WARNING: {error.error}")
-        sly.logger.warning(f"WARNING: termination")
-        sys.exit()
+        raise dropbox.exceptions.AuthError(message="See the WARNING message above", request_id=None)
 
     return dbx
 
