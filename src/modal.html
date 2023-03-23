@@ -11,9 +11,35 @@
           :team-id.sync="state.teamId"
           :options="{showWorkspace: false, showLabel: false}"
         ></sly-select-team-workspace>
-        <el-checkbox style="margin: 10px 10px 0 8px" v-model="state.allTeams">All teams</el-checkbox>
+        <el-checkbox style="margin: 10px 10px 0 8px" v-model="state.allTeams"
+          >All teams</el-checkbox
+        >
       </sly-field>
-      
+
+      <sly-field
+        title="Choose project type"
+        description="Several types can be selected"
+        style="margin: 6px 10px 0x 0"
+      >
+        <div>
+          <el-select
+            v-model="state.types"
+            v-if="!state.allPTypes"
+            :multiple="true"
+            :filterable="false"
+            ><el-option
+              v-for="item in state.items"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            ></el-option>
+          </el-select>
+        </div>
+        <el-checkbox style="margin: 10px 10px 0 8px" v-model="state.allPTypes"
+          >All types</el-checkbox
+        >
+      </sly-field>
+
       <sly-field
         title="Project age"
         description="Please set the number of days to archive projects older than this period:"

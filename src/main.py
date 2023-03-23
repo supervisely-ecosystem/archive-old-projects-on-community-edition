@@ -22,6 +22,7 @@ if sly.is_development():
 
 api = sly.Api.from_env()
 
+ALL_PROJECT_TYPES = ["images", "videos", "volumes", "point_clouds", "point_cloud_episodes"]
 days_storage = int(os.environ["modal.state.age"])
 sleep_days = int(os.environ["modal.state.sleep"])
 sleep_time = sleep_days * 86400
@@ -99,8 +100,17 @@ def choose_teams():
         teams_infos = api.team.get_list()
     team_lists = []
     [team_lists.append(team[1]) for team in teams_infos]
-    sly.logger.info(f"This {len(team_lists)} team(s) will be processed: {team_lists}")
+    sly.logger.info(f"Processing {len(team_lists)} team(s) : {team_lists}")
     return teams_infos
+
+
+def choose_project_types():
+    if not bool(strtobool(os.environ["modal.state.allPTypes"])):
+        selected_project_types = os.environ["modal.state.types"]
+    else:
+        selected_project_types = ALL_PROJECT_TYPES
+    sly.logger.info(f"Processing Project type(s): {selected_project_types}")
+    return selected_project_types
 
 
 def sort_by_date(projects_info):
@@ -112,6 +122,19 @@ def sort_by_date(projects_info):
             projects_to_del[project_info.id] = project_info.name
 
     return projects_to_del
+
+
+def download_project_by_type(project_type, api, project_id, temp_dir):
+    if project_type == "images":
+        sly.Project.download(api, project_id=project_id, dest_dir=temp_dir)
+    elif project_type == "videos":
+        sly.VideoProject.download(api, project_id=project_id, dest_dir=temp_dir)
+    elif project_type == "volumes":
+        sly.VolumeProject.download(api, project_id=project_id, dest_dir=temp_dir)
+    elif project_type == "point_clouds":
+        sly.PointcloudProject.download(api, project_id=project_id, dest_dir=temp_dir)
+    elif project_type == "point_cloud_episodes":
+        sly.PointcloudEpisodeProject.download(api, project_id=project_id, dest_dir=temp_dir)
 
 
 def is_project_archived(project_info):
@@ -163,7 +186,7 @@ def create_folder_on_dropbox(dbx):
     task_id = os.getenv("TASK_ID")
     folder_path = f"/supervisely_archive_{task_id}"
     try:
-        sly.logger.info(f"Trying to create folder [{folder_path[1:]}] on Dropbox")
+        sly.logger.info(f"Creating folder [{folder_path[1:]}] on Dropbox")
         dbx.files_create_folder_v2(folder_path)
     except dropbox.exceptions.ApiError as e:
         if e.error.get_path().is_conflict():
@@ -272,17 +295,17 @@ def compare_hashes(hash1, hash2):
 def set_project_archived(project_id, hash_compare_results, link_to_restore):
     if hash_compare_results:
         api.project.archive(project_id, link_to_restore)
-        sly.logger.info(f"Data of Project [ID: {project_id}] removed from Ecosystem")
+        sly.logger.info(f"Project [ID: {project_id}] archived, data removed from Ecosystem")
     else:
         if isinstance(link_to_restore, set):
             sly.logger.warning(
-                f"Data of Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch."
+                f"Project [ID: {project_id}] data will not be removed from Ecosystem due to hash mismatch."
             )
             for link in link_to_restore:
                 sly.logger.warning(f"Please check the uploaded part of data at [{link}]")
         else:
             sly.logger.warning(
-                f"Data of Project [ID: {project_id}] will not be removed from Ecosystem due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
+                f"Project [ID: {project_id}] data will not be removed from Ecosystem due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
             )
 
 
@@ -292,6 +315,7 @@ def main():
     while True:
         sly.logger.info("Starting to archive old projects")
         teams_infos = choose_teams()
+        selected_project_types = choose_project_types()
         for team_info in teams_infos:
             team_id = team_info[0]
             team_name = team_info[1]
@@ -309,11 +333,11 @@ def main():
                     project_info = api.project.get_info_by_id(project_id)
                     project_type = project_info.type
                     already_archived = is_project_archived(project_info)
-                    if project_type == "images" and not already_archived:
+                    if project_type in selected_project_types and not already_archived:
                         temp_dir = os.path.join(storage_dir, str(project_id))
                         temp_dir = temp_dir.replace("\\", "/")
                         sly.logger.info(f"Packing data for a project [ID: {project_id}] ")
-                        sly.Project.download(api, project_id=project_id, dest_dir=temp_dir)
+                        download_project_by_type(project_type, api, project_id, temp_dir)
                         archive_path = temp_dir + ".tar"
 
                         if get_directory_size(temp_dir) >= max_archive_size:
@@ -355,7 +379,7 @@ def main():
                             silent_remove(tars_to_upload)
 
                         sly.logger.info(
-                            f"Archived successfully [ID: {project_id}] [NAME: {projects_to_del[project_id]}] ! Link to restore: {link_to_restore}"
+                            f"Uploaded successfully [ID: {project_id}] [NAME: {projects_to_del[project_id]}] | Link to restore: {link_to_restore}"
                         )
 
                         set_project_archived(project_id, hash_compare_results, link_to_restore)

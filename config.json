@@ -1,13 +1,40 @@
 {
-  "name": "Archive old projects",
+  "name": "Archive Projects to Dropbox",
   "type": "app",
   "version": "2.0.0",
   "categories": ["system"],
-  "description": "Remove old projects from community",
-  "docker_image": "supervisely/base-py-sdk:6.69.67",
+  "description": "Archive old projects on community",
+  "docker_image": "supervisely/base-py-sdk:6.70.9",
   "main_script": "src/main.py",
   "modal_template": "src/modal.html",
-  "modal_template_state": { "age": 30, "sleep": 2, "allTeams": false},
+  "modal_template_state": {
+    "age": 30,
+    "sleep": 2,
+    "allTeams": false,
+    "allPTypes": false,
+    "items": [
+      {
+        "value": "images",
+        "label": "images"
+      },
+      {
+        "value": "videos",
+        "label": "videos"
+      },
+      {
+        "value": "volumes",
+        "label": "volumes"
+      },
+      {
+        "value": "point_clouds",
+        "label": "point_clouds"
+      },
+      {
+        "value": "point_cloud_episodes",
+        "label": "point_cloud_episodes"
+      }
+    ]
+  },
   "task_location": "workspace_tasks",
   "headless": true,
   "release": { "version": "v0.0.1", "name": "init" },
