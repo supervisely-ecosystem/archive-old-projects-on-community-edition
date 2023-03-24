@@ -197,7 +197,7 @@ def upload_via_session_to_dropbox(archive_path, name, chunk_size, dbx, destinati
     with open(archive_path, "rb") as archive:
         file_size = os.path.getsize(archive_path)
 
-        if chunk_size > file_size:
+        if chunk_size >= file_size:
             # upload_chunk_size = (file_size // 2) // multiplicity * multiplicity
             chunk_size = file_size // 2
         name = str(name)
