@@ -55,15 +55,15 @@ def auth_to_dropbox():
         app_secret = str(os.environ["app_secret"])
         for key in (refresh_token, app_key, app_secret):
             if key == "":
-                raise ValueError
+                sly.logger.warning(f"WARNING: {app_env_file_path} file contains empty value(s)")
+                raise ValueError(f"ERROR: {app_env_file_path} file contains empty value(s)")
     except KeyError as error:
         sly.logger.warning(
             f"WARNING: {app_env_file_path} file does not contain the necessary data: [{error.args[0]}]"
         )
-        raise KeyError("See the WARNING message above")
-    except ValueError as error:
-        sly.logger.warning(f"WARNING: {app_env_file_path} file contains empty value(s)")
-        raise ValueError("See the WARNING message above")
+        raise KeyError(
+            f"ERROR: {app_env_file_path} file does not contain the necessary data: [{error.args[0]}]"
+        )
 
     try:
         dbx = dropbox.Dropbox(
@@ -72,7 +72,7 @@ def auth_to_dropbox():
     except dropbox.dropbox_client.BadInputException as error:
         sly.logger.warning(f"WARNING: {error}")
         raise dropbox.dropbox_client.BadInputException(
-            message="See the WARNING message above", request_id=None
+            message=f"ERROR: {error.error}", request_id=error.request_id
         )
 
     try:
@@ -82,12 +82,9 @@ def auth_to_dropbox():
         sly.logger.warning(
             f"WARNING: Authorisation unsuccessful. Check values in {app_env_file_path}"
         )
-        raise dropbox.exceptions.BadInputError(
-            message="See the WARNING message above", request_id=None
+        raise ValueError(
+            error.args[2], f"Authorisation unsuccessful. Check values in {app_env_file_path}"
         )
-    except dropbox.exceptions.AuthError as error:
-        sly.logger.warning(f"WARNING: {error.error}")
-        raise dropbox.exceptions.AuthError(message="See the WARNING message above", request_id=None)
 
     return dbx
 
