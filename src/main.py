@@ -127,7 +127,7 @@ def download_project_by_type(project_type, api, project_id, temp_dir):
     elif project_type == "videos":
         sly.VideoProject.download(api, project_id=project_id, dest_dir=temp_dir)
     elif project_type == "volumes":
-        sly.download_volume_project(api, project_id=project_id, dest_dir=temp_dir)
+        sly.VolumeProject.download(api, project_id=project_id, dest_dir=temp_dir)
     elif project_type == "point_clouds":
         sly.PointcloudProject.download(api, project_id=project_id, dest_dir=temp_dir)
     elif project_type == "point_cloud_episodes":
