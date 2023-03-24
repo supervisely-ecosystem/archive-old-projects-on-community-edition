@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "categories": ["system"],
   "description": "Archive old projects on community",
-  "docker_image": "supervisely/base-py-sdk:6.70.9",
+  "docker_image": "supervisely/base-py-sdk:6.70.13",
   "main_script": "src/main.py",
   "modal_template": "src/modal.html",
   "modal_template_state": {
@@ -39,8 +39,8 @@
   "headless": true,
   "release": { "version": "v0.0.1", "name": "init" },
   "slug": "sl/archive-old-projects",
-  "poster": "https://user-images.githubusercontent.com/115161827/215558057-ca96a7e2-c243-4232-8133-8cab6b42d904.png",
-  "icon": "https://user-images.githubusercontent.com/115161827/215558050-d98cfff3-854c-4af8-9d77-942f6212a243.png",
+  "poster": "",
+  "icon": "",
   "icon_cover": true,
   "context_menu": {
     "target": ["files_file"]
