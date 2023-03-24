@@ -26,11 +26,11 @@ After the archiving process is complete, the application will continue to run in
 
 1. You need to create an account on [Dropbox](https://www.dropbox.com/)
 2. Go to [Dropbox developers](https://www.dropbox.com/developers) and create your App:
-   - Choose an API: "Scoped access"
-   - Choose the type of access you need. You can choose any.
+    - Choose an API: "Scoped access"
+    - Choose the type of access you need. You can choose any.
 3. After creating your app, you need to configure your app permissions for Files and Folders:
-   - Metadata: read and write
-   - Content: read and write
+    - Metadata: read and write
+    - Content: read and write
 4. Create a file named "**dropbox.env**" locally and enter your keys from your App Settings:
 
    ```
