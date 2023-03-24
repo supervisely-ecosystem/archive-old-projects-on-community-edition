@@ -11,7 +11,7 @@
     "age": 30,
     "sleep": 2,
     "allTeams": false,
-    "allPTypes": false,
+    "allPTypes": true,
     "items": [
       {
         "value": "images",

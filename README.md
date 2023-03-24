@@ -48,9 +48,10 @@ After the archiving process is complete, the application will continue to run in
 2. To run the application, right-click on the file and choose "Run App" from the context menu.
 3. Select "Old Projects Archivator" from the list of applications and run it.
 4. Choose the team for which you want to archive old projects, or select all teams using the check-box.
-5. Set the number of days for the project age. Any project older than this period will be archived.
-6. Set the sleep time in days after which the application will resume its work.
-7. Finally, run the application.
+5. Choose the types of project for which you want to archive old projects, deselect "All types" check-box to see selector.
+6. Set the number of days for the project age. Any project older than this period will be archived.
+7. Set the sleep time in days after which the application will resume its work.
+8. Finally, run the application.
 
 The application will check projects, select those that meet the specified criteria based on the date, and process each one sequentially. During processing, a directory named `supervisely_archive_id` will be created in the root directory of Dropbox, where `id` is the number of the task that the application is working on. Project archives named with the project `id` will be uploaded in this directory.
 If the project size exceeds **348 GB**, the project will be split into parts and uploaded into a created in advance subdirectory that named with the project `id`.
