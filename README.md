@@ -1,5 +1,5 @@
 <div align='center' markdown> 
-<img src='https://user-images.githubusercontent.com/115161827/229124706-3ca44d38-2e0c-48a5-93b1-3881d9341152.jpg' /> <br>
+<img src="https://user-images.githubusercontent.com/115161827/229174933-2997232c-7ea2-465b-a743-c7863edbb189.png" /> <br>
 
 # Archive Projects to Dropbox
 
