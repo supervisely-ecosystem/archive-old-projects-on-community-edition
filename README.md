@@ -1,5 +1,5 @@
 <div align='center' markdown> 
-<img src='https://i.imgur.com/UdBujFN.png' width='250'/> <br>
+<img src='https://user-images.githubusercontent.com/115161827/229124706-3ca44d38-2e0c-48a5-93b1-3881d9341152.jpg' /> <br>
 
 # Archive Projects to Dropbox
 
@@ -9,8 +9,11 @@
   <a href='#how-to-run'>How to Run</a>
 </p>
 
+[![](https://img.shields.io/badge/supervisely-ecosystem-brightgreen)](https://ecosystem.supervise.ly/apps/supervisely-ecosystem/archive-old-projects-on-community-edition)
 [![](https://img.shields.io/badge/slack-chat-green.svg?logo=slack)](https://supervise.ly/slack)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/supervisely-ecosystem/archive-old-projects-on-community-edition)
+[![views](https://app.supervise.ly/img/badges/views/supervisely-ecosystem/archive-old-projects-on-community-edition.png)](https://supervise.ly)
+[![runs](https://app.supervise.ly/img/badges/runs/supervisely-ecosystem/carchive-old-projects-on-community-edition.png)](https://supervise.ly)
 
 </div>
 
