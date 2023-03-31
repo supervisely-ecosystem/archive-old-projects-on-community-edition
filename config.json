@@ -39,8 +39,8 @@
   "headless": true,
   "release": { "version": "v0.0.1", "name": "init" },
   "slug": "sl/archive-old-projects",
-  "poster": "",
-  "icon": "",
+  "poster": "https://user-images.githubusercontent.com/115161827/229124706-3ca44d38-2e0c-48a5-93b1-3881d9341152.jpg",
+  "icon": "https://user-images.githubusercontent.com/115161827/229124666-5766f7e8-a968-4be8-b876-c05458b871df.jpg",
   "icon_cover": true,
   "context_menu": {
     "target": ["files_file"]
