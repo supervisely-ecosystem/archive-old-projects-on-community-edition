@@ -54,8 +54,9 @@ After the archiving process is complete, the application will continue to run in
 5. Choose the types of project for which you want to archive old projects, deselect "All types" check-box to see selector.
 6. Set the number of days for the project age. Any project older than this period will be archived.
 7. Set the sleep time in days after which the application will resume its work.
-8. Finally, run the application.
-
+8. Finally, run the application. <br><br>
+<img src="https://user-images.githubusercontent.com/115161827/229535768-c6eb4c21-7378-47af-a040-48e44785ee29.gif" />
+</br></br>
 The application will check projects, select those that meet the specified criteria based on the date, and process each one sequentially. During processing, a directory named `supervisely_archive_id` will be created in the root directory of Dropbox, where `id` is the number of the task that the application is working on. Project archives named with the project `id` will be uploaded in this directory.
 If the project size exceeds **348 GB**, the project will be split into parts and uploaded into a created in advance subdirectory that named with the project `id`.
 After processing, the projects in the workspace will be marked as archived, and instead of the data, there will be a link to it on Dropbox.
