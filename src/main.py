@@ -53,7 +53,8 @@ def auth_to_dropbox():
         refresh_token = str(os.environ["refresh_token"])
         app_key = str(os.environ["app_key"])
         app_secret = str(os.environ["app_secret"])
-        dbx_user_id = str(os.environ["dbx_user_id"])
+        if "dbx_user_id" in os.environ:
+            dbx_user_id = str(os.environ["dbx_user_id"])
         for key in (refresh_token, app_key, app_secret):
             if key == "":
                 sly.logger.warning(f"WARNING: {app_env_file_path} file contains empty value(s)")
