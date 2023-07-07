@@ -188,7 +188,7 @@ def create_multivolume_archive(temp_dir, storage_dir, max_archive_size):
     return archive_names
 
 
-def create_folder_on_dropbox(dbx):
+def create_folder_on_dropbox(dbx: dropbox.Dropbox):
     task_id = os.getenv("TASK_ID")
     parent = "/supervisely_project_archives"
 
