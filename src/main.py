@@ -52,17 +52,13 @@ def auth_to_dropbox():
     try:
         refresh_token = str(os.environ["refresh_token"])
         app_key = str(os.environ["app_key"])
-        app_secret = str(os.environ["app_secret"])
-        if "dbx_user_id" in os.environ:
-            dbx_user_id = str(os.environ["dbx_user_id"])
+        app_secret = str(os.environ["app_secret"])        
+        dbx_user_id = str(os.environ["dbx_user_id"]) if "dbx_user_id" in os.environ else None
+            
         for key in (refresh_token, app_key, app_secret):
             if key == "":
-                sly.logger.warning(f"WARNING: {app_env_file_path} file contains empty value(s)")
                 raise ValueError(f"ERROR: {app_env_file_path} file contains empty value(s)")
-    except KeyError as error:
-        sly.logger.warning(
-            f"WARNING: {app_env_file_path} file does not contain the necessary data: [{error.args[0]}]"
-        )
+    except KeyError as error:        
         raise KeyError(
             f"ERROR: {app_env_file_path} file does not contain the necessary data: [{error.args[0]}]"
         )
@@ -80,7 +76,6 @@ def auth_to_dropbox():
                 oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
             )
     except dropbox.dropbox_client.BadInputException as error:
-        sly.logger.warning(f"WARNING: {error}")
         raise dropbox.dropbox_client.BadInputException(
             message=f"ERROR: {error.error}", request_id=error.request_id
         )
@@ -88,10 +83,7 @@ def auth_to_dropbox():
     try:
         dbx.check_user()
         sly.logger.info("Connected successfully!")
-    except dropbox.exceptions.BadInputError as error:
-        sly.logger.warning(
-            f"WARNING: Authorisation unsuccessful. Check values in {app_env_file_path}"
-        )
+    except dropbox.exceptions.BadInputError as error:        
         raise ValueError(
             error.args[2], f"Authorisation unsuccessful. Check values in {app_env_file_path}"
         )
