@@ -69,10 +69,13 @@ def auth_to_dropbox():
     try:
         if dbx_user_id:
             dbx = dropbox.Dropbox(
-                headers={'Dropbox-API-Select-User': dbx_user_id}, oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
+                headers={"Dropbox-API-Select-User": dbx_user_id},
+                oauth2_refresh_token=refresh_token,
+                app_key=app_key,
+                app_secret=app_secret,
             )
         else:
-             dbx = dropbox.Dropbox(
+            dbx = dropbox.Dropbox(
                 oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
             )
     except dropbox.dropbox_client.BadInputException as error:
@@ -81,7 +84,7 @@ def auth_to_dropbox():
             message=f"ERROR: {error.error}", request_id=error.request_id
         )
 
-    try:        
+    try:
         dbx.check_user()
         sly.logger.info("Connected successfully!")
     except dropbox.exceptions.BadInputError as error:
@@ -185,9 +188,24 @@ def create_multivolume_archive(temp_dir, storage_dir, max_archive_size):
     return archive_names
 
 
-def create_folder_on_dropbox(dbx):
+def create_folder_on_dropbox(dbx: dropbox.Dropbox):
     task_id = os.getenv("TASK_ID")
-    folder_path = f"/supervisely_archive_{task_id}"
+    parent = "/supervisely_project_archives"
+
+    try:
+        dbx.files_list_folder(parent)
+        dir_exists = True
+    except dropbox.exceptions.ApiError as e:
+        if isinstance(e.error, dropbox.files.ListFolderError):
+            dir_exists = False
+        else:
+            sly.logger.warning(f"API error: {e}")
+
+    if dir_exists is False:
+        dbx.files_create_folder_v2(parent)
+
+    folder_path = f"{parent}/archive_{task_id}"
+
     try:
         sly.logger.info(f"Creating folder [{folder_path[1:]}] on Dropbox")
         dbx.files_create_folder_v2(folder_path)
@@ -254,7 +272,10 @@ def upload_via_session_to_dropbox(archive_path, name, chunk_size, dbx, destinati
 def upload_entire_file(archive_path, project_id, chunk_size, dbx, destination_folder):
     while True:
         try:
-            (upload_path, hash_compare_results,) = upload_via_session_to_dropbox(
+            (
+                upload_path,
+                hash_compare_results,
+            ) = upload_via_session_to_dropbox(
                 archive_path,
                 project_id,
                 chunk_size,
