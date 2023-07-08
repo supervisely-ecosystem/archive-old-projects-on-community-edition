@@ -19,11 +19,11 @@
 
 ## Overview
 
-This application allows admins to archive team projects for selected teams, or all teams if desired, which have been updated prior to a selected period of time (in days). Old and unused projects take up space which could be more efficiently used in the present. If you plan to use a project at some point in the future, it is recommended to move it to a repository outside the ecosystem, from where it can be imported back later using other tools.
+This application allows admins to archive team projects for selected teams, or all teams if desired, which have been updated before a selected period (in days). Old and unused projects take up space that could be more efficiently used in the present. If you plan to use a project at some point in the future, it is recommended to move it to a repository outside the ecosystem, from where it can be imported back later using other tools.
 
-To archive projects, it is strictly recommended to use <a href="https://www.dropbox.com/">Dropbox</a> as a save storage.
+To archive projects, it is strictly recommended to use <a href="https://www.dropbox.com/">Dropbox</a> as storage.
 
-After the archiving process is complete, the application will continue to run in the background and resume archiving after a specified period of time (in days). If necessary, you can stop the application in `Workspace Tasks`.
+After the archiving process is complete, the application will continue to run in the background and resume archiving after a specified period (in days). If necessary, you can stop the application in `Workspace Tasks`.
 
 ## Preparation
 
@@ -45,18 +45,28 @@ After the archiving process is complete, the application will continue to run in
    `refresh_token`
    can be obtained using [this solution](https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/Get-refresh-token-from-access-token/td-p/596739)
 
+
+   ⚠️ if you use a member account of the Dropbox Business team, add one more line
+
+   ```   
+   dbx_user_id="dbmid"
+   ```
+
+   `dbx_user_id`
+   can be obtained using [this solution](https://www.dropboxforum.com/t5/Discuss-Dropbox-Developer-API/Question-on-retrieving-the-dbmid-for-my-user/m-p/530350/highlight/true#M1991)
+   
 ## How to Run
 
 1. Upload "**dropbox.env**" to "Team Files" in Ecosystem.
 2. To run the application, right-click on the file and choose "Run App" from the context menu.
 3. Select "Old Projects Archivator" from the list of applications and run it.
-4. Choose the team for which you want to archive old projects, or select all teams using the check-box.
-5. Choose the types of project for which you want to archive old projects, deselect "All types" check-box to see selector.
+4. Choose the team for which you want to archive old projects, or select all teams using the checkbox.
+5. Choose the types of projects for which you want to archive the old ones, and deselect the "All types" checkbox to see the selector.
 6. Set the number of days for the project age. Any project older than this period will be archived.
 7. Set the sleep time in days after which the application will resume its work.
-8. Finally, run the application. <br><br>
-<img src="https://user-images.githubusercontent.com/115161827/229535768-c6eb4c21-7378-47af-a040-48e44785ee29.gif" />
-</br></br>
-The application will check projects, select those that meet the specified criteria based on the date, and process each one sequentially. During processing, a directory named `supervisely_archive_id` will be created in the root directory of Dropbox, where `id` is the number of the task that the application is working on. Project archives named with the project `id` will be uploaded in this directory.
-If the project size exceeds **348 GB**, the project will be split into parts and uploaded into a created in advance subdirectory that named with the project `id`.
+8. Finally, run the application.
+   <img src="https://user-images.githubusercontent.com/115161827/229535768-c6eb4c21-7378-47af-a040-48e44785ee29.gif" />
+
+The application will check projects, select those that meet the specified criteria based on the date, and process each one sequentially. During processing, a directory named `archive_{id}` will be created in the `supervisely_project_archives` directory of Dropbox, where `id` is the number of the task that the application is working on. Project archives named with the project `id` will be uploaded to this directory.
+If the project size exceeds **348 GB**, the project will be split into parts and uploaded into a created in-advance subdirectory that is named with the project `id`.
 After processing, the projects in the workspace will be marked as archived, and instead of the data, there will be a link to it on Dropbox.
