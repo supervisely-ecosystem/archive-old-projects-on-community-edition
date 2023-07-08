@@ -71,10 +71,12 @@ def auth_to_dropbox():
                 app_key=app_key,
                 app_secret=app_secret,
             )
+            member = " as Business Team member"
         else:
             dbx = dropbox.Dropbox(
                 oauth2_refresh_token=refresh_token, app_key=app_key, app_secret=app_secret
             )
+            member = " as Basic user"
     except dropbox.dropbox_client.BadInputException as error:
         raise dropbox.dropbox_client.BadInputException(
             message=f"ERROR: {error.error}", request_id=error.request_id
@@ -82,7 +84,7 @@ def auth_to_dropbox():
 
     try:
         dbx.check_user()
-        sly.logger.info("Connected successfully!")
+        sly.logger.info(f"Connected successfully{member}!")
     except dropbox.exceptions.BadInputError as error:        
         raise ValueError(
             error.args[2], f"Authorisation unsuccessful. Check values in {app_env_file_path}"
