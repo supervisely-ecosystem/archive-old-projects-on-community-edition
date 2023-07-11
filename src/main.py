@@ -25,6 +25,7 @@ api = sly.Api.from_env()
 ALL_PROJECT_TYPES = ["images", "videos", "volumes", "point_clouds", "point_cloud_episodes"]
 days_storage = int(os.environ["modal.state.age"])
 sleep_days = int(os.environ["modal.state.sleep"])
+num_processes = int(os.environ["modal.state.processes"])
 sleep_time = sleep_days * 86400
 del_date = datetime.now() - timedelta(days=days_storage)
 storage_dir = sly.app.get_data_dir()
@@ -46,9 +47,10 @@ def download_env_file():
 
 
 def auth_to_dropbox():
-    app_env_file_path = download_env_file()
+    # app_env_file_path = download_env_file()
     sly.logger.info("Connecting to Dropbox...")
-    load_dotenv(app_env_file_path)
+    # load_dotenv(app_env_file_path)
+    load_dotenv("dropbox.env")
     try:
         refresh_token = str(os.environ["refresh_token"])
         app_key = str(os.environ["app_key"])
@@ -402,7 +404,7 @@ destination_folder = create_folder_on_dropbox(dbx)
 def main():
     while True:
         project_ids = collect_project_ids()
-        pool = multiprocessing.Pool(processes=5)
+        pool = multiprocessing.Pool(processes=num_processes)
 
         with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
             for _ in pool.imap_unordered(archive_project, project_ids):
