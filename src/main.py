@@ -25,7 +25,7 @@ api = sly.Api.from_env()
 ALL_PROJECT_TYPES = ["images", "videos", "volumes", "point_clouds", "point_cloud_episodes"]
 days_storage = int(os.environ["modal.state.age"])
 sleep_days = int(os.environ["modal.state.sleep"])
-num_processes = int(os.environ["modal.state.processes"])
+# num_processes = int(os.environ["modal.state.processes"])
 sleep_time = sleep_days * 86400
 del_date = datetime.now() - timedelta(days=days_storage)
 storage_dir = sly.app.get_data_dir()
@@ -50,6 +50,7 @@ def auth_to_dropbox():
     app_env_file_path = download_env_file()
     sly.logger.info("Connecting to Dropbox...")
     load_dotenv(app_env_file_path)
+    # load_dotenv("dropbox.env")
     try:
         refresh_token = str(os.environ["refresh_token"])
         app_key = str(os.environ["app_key"])
@@ -265,7 +266,7 @@ def upload_via_session_to_dropbox(archive_path, name, chunk_size, dbx, destinati
         return upload_path, hash_compare_results
 
 
-def upload_entire_file(archive_path, project_id, chunk_size, dbx, destination_folder):
+def upload_archive_no_split(archive_path, project_id, chunk_size, dbx, destination_folder):
     while True:
         try:
             (
@@ -288,12 +289,12 @@ def upload_entire_file(archive_path, project_id, chunk_size, dbx, destination_fo
     return link_to_restore, hash_compare_results
 
 
-def upload_volumes(parts, chunk_size, dbx, destination_folder):
+def upload_archive_volumes(parts, chunk_size, dbx, destination_folder):
     sorted_parts = sorted(list(parts))
     hash_compare_results = list()
     for part in sorted_parts:
         part_name = part.split("/")[-1].replace(".tar", "")
-        _, hash_compare_result = upload_entire_file(
+        _, hash_compare_result = upload_archive_no_split(
             part, part_name, chunk_size, dbx, destination_folder
         )
         hash_compare_results.append(hash_compare_result)
@@ -371,7 +372,7 @@ def archive_project(project_id):
         destination_folder_for_project = f"{destination_folder}/{project_id}"
         dbx.files_create_folder_v2(destination_folder_for_project)
         sly.logger.info(f"A nested folder has been created with the name: {project_id}")
-        link_to_restore, hash_compare_results = upload_volumes(
+        link_to_restore, hash_compare_results = upload_archive_volumes(
             tars_to_upload,
             chunk_size,
             dbx,
@@ -380,7 +381,7 @@ def archive_project(project_id):
         for tar in tars_to_upload:
             silent_remove(tar)
     else:
-        link_to_restore, hash_compare_results = upload_entire_file(
+        link_to_restore, hash_compare_results = upload_archive_no_split(
             tars_to_upload,
             project_id,
             chunk_size,
@@ -403,14 +404,32 @@ destination_folder = create_folder_on_dropbox(dbx)
 def main():
     while True:
         project_ids = collect_project_ids()
-        pool = multiprocessing.Pool(processes=num_processes)
+        # pool = multiprocessing.Pool(processes=num_processes)
 
-        with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
-            for _ in pool.imap_unordered(archive_project, project_ids):
-                pbar.update(1)
+        # with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
+        #     for _ in pool.imap_unordered(archive_project, project_ids):
+        #         pbar.update(1)
 
-        pool.close()
-        pool.join()
+        # pool.close()
+        # pool.join()
+        if len(project_ids) != 0:
+            with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
+                for project_id in project_ids:
+                    custom_data = api.project.get_info_by_id(project_id).custom_data
+                    if custom_data.get("archivation_status") == "in_progress":
+                        ar_task_id = custom_data.get("archivation_task_id")
+                        sly.logger.info(
+                            f"Project with ID: {project_id} archiving by another App instance with ID: {ar_task_id}"
+                        )
+                        pbar.update(1)
+                        continue
+                    custom_data["archivation_status"] = "in_progress"
+                    custom_data["archivation_task_id"] = api.task_id
+                    api.project.update_custom_data(project_id, custom_data)
+                    archive_project(project_id)
+                    custom_data["archivation_status"] = "completed"
+                    api.project.update_custom_data(project_id, custom_data)
+                    pbar.update(1)
 
         sly.logger.info(
             f"Task accomplished, standby mode activated. The next check will be in {sleep_days} day(s)"
