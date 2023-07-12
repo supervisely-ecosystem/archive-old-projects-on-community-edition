@@ -314,6 +314,10 @@ def compare_hashes(hash1, hash2):
 
 
 def set_project_archived(project_id, hash_compare_results, link_to_restore):
+    
+    if is_project_archived(api.project.get_info_by_id(project_id)):
+        sly.logger.warning(f"Project [{project_id}] already archived, skip this project at the step of changing the metadata.")
+        return
     if hash_compare_results:
         api.project.archive(project_id, link_to_restore)
         sly.logger.info(f"Project [ID: {project_id}] archived, data removed from Ecosystem")
