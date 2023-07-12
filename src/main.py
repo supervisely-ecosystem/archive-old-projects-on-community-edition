@@ -417,6 +417,7 @@ def main():
             with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
                 for project_id in project_ids:
                     try:
+                        start_time = datetime.now()
                         custom_data = api.project.get_info_by_id(project_id).custom_data
                         if custom_data.get("archivation_status") == "in_progress":
                             ar_task_id = custom_data.get("archivation_task_id")
@@ -428,6 +429,7 @@ def main():
                         custom_data["archivation_status"] = "in_progress"
                         custom_data["archivation_task_id"] = task_id
                         api.project.update_custom_data(project_id, custom_data)
+                        sly.logger.info(f" <<<<<<<<<<<<<<<<< Changing status time: {datetime.now() - start_time}")
                         archive_project(project_id)
                         custom_data["archivation_status"] = "completed"
                         api.project.update_custom_data(project_id, custom_data)
