@@ -49,7 +49,6 @@ def auth_to_dropbox():
     app_env_file_path = download_env_file()
     sly.logger.info("Connecting to Dropbox...")
     load_dotenv(app_env_file_path)
-    # load_dotenv("dropbox.env")
     try:
         refresh_token = str(os.environ["refresh_token"])
         app_key = str(os.environ["app_key"])
@@ -353,6 +352,7 @@ def collect_project_ids():
 
 
 def archive_project(project_id):
+    sly.logger.info("-------------------------------------------------")
     sly.logger.info(f"Starting to archive project [ID: {project_id}] ")
     temp_dir = os.path.join(storage_dir, str(project_id))
     temp_dir = temp_dir.replace("\\", "/")    
