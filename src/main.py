@@ -1,4 +1,4 @@
-import os, time, multiprocessing
+import os, time, random
 from datetime import datetime, timedelta
 from distutils.util import strtobool
 import supervisely as sly
@@ -25,7 +25,6 @@ api = sly.Api.from_env()
 ALL_PROJECT_TYPES = ["images", "videos", "volumes", "point_clouds", "point_cloud_episodes"]
 days_storage = int(os.environ["modal.state.age"])
 sleep_days = int(os.environ["modal.state.sleep"])
-# num_processes = int(os.environ["modal.state.processes"])
 sleep_time = sleep_days * 86400
 del_date = datetime.now() - timedelta(days=days_storage)
 storage_dir = sly.app.get_data_dir()
@@ -359,12 +358,8 @@ def archive_project(project_id):
     temp_dir = temp_dir.replace("\\", "/")    
     project_type = api.project.get_info_by_id(project_id).type
     download_project_by_type(project_type, api, project_id, temp_dir)
-    archive_path = temp_dir + ".tar"
-    
-    # custom_data = api.project.get_info_by_id(project_id).custom_data
-    # if custom_data.get("archivation_status") == "in_progress":
-    #     raise ArchivationException(f"Skipping project {project_id} that is currently being archived by another App instance")
-    
+    archive_path = temp_dir + ".tar" 
+        
     if get_directory_size(temp_dir) >= max_archive_size:
         sly.logger.info(
             "The project takes up more space than the data transfer limits allow, so it will be split into several parts and placed in a separate Dropbox project folder."
@@ -412,16 +407,10 @@ destination_folder = create_folder_on_dropbox(dbx)
 
 def main():
     while True:
-        project_ids = collect_project_ids()
-        # pool = multiprocessing.Pool(processes=num_processes)
-
-        # with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
-        #     for _ in pool.imap_unordered(archive_project, project_ids):
-        #         pbar.update(1)
-
-        # pool.close()
-        # pool.join()
+        project_ids = collect_project_ids()        
+        random.shuffle(project_ids)
         skipped_projects = []
+        task_id = api.task_id
         if len(project_ids) != 0:
             with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
                 for project_id in project_ids:
@@ -435,14 +424,11 @@ def main():
                             pbar.update(1)
                             continue
                         custom_data["archivation_status"] = "in_progress"
-                        custom_data["archivation_task_id"] = api.task_id
+                        custom_data["archivation_task_id"] = task_id
                         api.project.update_custom_data(project_id, custom_data)
                         archive_project(project_id)
                         custom_data["archivation_status"] = "completed"
                         api.project.update_custom_data(project_id, custom_data)
-                    # except ArchivationException as e:
-                    #     sly.logger.error(f'{e}')
-                    #     skipped_projects.append(project_id)
                     except Exception as e:                        
                         sly.logger.error(f'{e}')
                         sly.logger.warning(f'Process skipped for Project with ID: {project_id}')
