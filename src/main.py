@@ -316,7 +316,7 @@ def compare_hashes(hash1, hash2):
 def set_project_archived(project_id, hash_compare_results, link_to_restore):
     
     if is_project_archived(api.project.get_info_by_id(project_id)):
-        sly.logger.warning(f"Project [{project_id}] already archived, skip this project at the step of changing the metadata.")
+        sly.logger.warning(f"Skip adding URL for project {project_id}, this project is already archived")
         return
     if hash_compare_results:
         api.project.archive(project_id, link_to_restore)
@@ -358,7 +358,12 @@ def archive_project(project_id):
     project_type = api.project.get_info_by_id(project_id).type
     download_project_by_type(project_type, api, project_id, temp_dir)
     archive_path = temp_dir + ".tar"
-
+    
+    custom_data = api.project.get_info_by_id(project_id).custom_data
+    if custom_data.get("archivation_status") == "in_progress":
+        sly.logger.warning(f"Skipping project {project_id} that is currently being archived by another App instance")
+        return
+    
     if get_directory_size(temp_dir) >= max_archive_size:
         sly.logger.info(
             "The project takes up more space than the data transfer limits allow, so it will be split into several parts and placed in a separate Dropbox project folder."
@@ -424,7 +429,7 @@ def main():
                         if custom_data.get("archivation_status") == "in_progress":
                             ar_task_id = custom_data.get("archivation_task_id")
                             sly.logger.info(
-                                f"Project with ID: {project_id} archiving by another App instance with ID: {ar_task_id}"
+                                f"Skipping project {project_id} that is currently being archived by another App instance with ID: {ar_task_id}"
                             )
                             pbar.update(1)
                             continue
