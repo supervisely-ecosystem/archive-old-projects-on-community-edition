@@ -316,6 +316,8 @@ def set_project_archived(project_id, hash_compare_results, link_to_restore):
     
     if is_project_archived(api.project.get_info_by_id(project_id)):
         sly.logger.warning(f"Skip adding URL for project {project_id}, this project is already archived")
+        shared_link_metadata = dbx.sharing_get_shared_link_metadata(link_to_restore)
+        dbx.files_delete_v2(shared_link_metadata.path_lower)
         return
     if hash_compare_results:
         api.project.archive(project_id, link_to_restore)
