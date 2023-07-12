@@ -350,8 +350,8 @@ def collect_project_ids():
                     choosen_projects.append(project_id)
     return choosen_projects
 
-class ArchivationException(Exception):
-    pass
+# class ArchivationException(Exception):
+#     pass
 
 def archive_project(project_id):
     sly.logger.info(f"Starting to archive project [ID: {project_id}] ")
@@ -361,9 +361,9 @@ def archive_project(project_id):
     download_project_by_type(project_type, api, project_id, temp_dir)
     archive_path = temp_dir + ".tar"
     
-    custom_data = api.project.get_info_by_id(project_id).custom_data
-    if custom_data.get("archivation_status") == "in_progress":
-        raise ArchivationException(f"Skipping project {project_id} that is currently being archived by another App instance")
+    # custom_data = api.project.get_info_by_id(project_id).custom_data
+    # if custom_data.get("archivation_status") == "in_progress":
+    #     raise ArchivationException(f"Skipping project {project_id} that is currently being archived by another App instance")
     
     if get_directory_size(temp_dir) >= max_archive_size:
         sly.logger.info(
@@ -440,9 +440,9 @@ def main():
                         archive_project(project_id)
                         custom_data["archivation_status"] = "completed"
                         api.project.update_custom_data(project_id, custom_data)
-                    except ArchivationException as e:
-                        sly.logger.error(f'{e}')
-                        skipped_projects.append(project_id)
+                    # except ArchivationException as e:
+                    #     sly.logger.error(f'{e}')
+                    #     skipped_projects.append(project_id)
                     except Exception as e:                        
                         sly.logger.error(f'{e}')
                         sly.logger.warning(f'Process skipped for Project with ID: {project_id}')
