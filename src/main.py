@@ -348,10 +348,9 @@ def collect_project_ids():
 
 
 def archive_project(project_id):
-    sly.logger.info("Starting to archive old projects")
+    sly.logger.info(f"Starting to archive project [ID: {project_id}] ")
     temp_dir = os.path.join(storage_dir, str(project_id))
-    temp_dir = temp_dir.replace("\\", "/")
-    sly.logger.info(f"Packing data for a project [ID: {project_id}] ")
+    temp_dir = temp_dir.replace("\\", "/")    
     project_type = api.project.get_info_by_id(project_id).type
     download_project_by_type(project_type, api, project_id, temp_dir)
     archive_path = temp_dir + ".tar"
