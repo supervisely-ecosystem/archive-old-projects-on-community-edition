@@ -412,28 +412,38 @@ def main():
 
         # pool.close()
         # pool.join()
+        skipped_projects = []
         if len(project_ids) != 0:
             with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
                 for project_id in project_ids:
-                    custom_data = api.project.get_info_by_id(project_id).custom_data
-                    if custom_data.get("archivation_status") == "in_progress":
-                        ar_task_id = custom_data.get("archivation_task_id")
-                        sly.logger.info(
-                            f"Project with ID: {project_id} archiving by another App instance with ID: {ar_task_id}"
-                        )
-                        pbar.update(1)
-                        continue
-                    custom_data["archivation_status"] = "in_progress"
-                    custom_data["archivation_task_id"] = api.task_id
-                    api.project.update_custom_data(project_id, custom_data)
-                    archive_project(project_id)
-                    custom_data["archivation_status"] = "completed"
-                    api.project.update_custom_data(project_id, custom_data)
+                    try:
+                        custom_data = api.project.get_info_by_id(project_id).custom_data
+                        if custom_data.get("archivation_status") == "in_progress":
+                            ar_task_id = custom_data.get("archivation_task_id")
+                            sly.logger.info(
+                                f"Project with ID: {project_id} archiving by another App instance with ID: {ar_task_id}"
+                            )
+                            pbar.update(1)
+                            continue
+                        custom_data["archivation_status"] = "in_progress"
+                        custom_data["archivation_task_id"] = api.task_id
+                        api.project.update_custom_data(project_id, custom_data)
+                        archive_project(project_id)
+                        custom_data["archivation_status"] = "completed"
+                        api.project.update_custom_data(project_id, custom_data)
+                    except Exception as e:
+                        sly.logger.error(f'{e}')
+                        sly.logger.warning(f'Process skipped for Project with ID: {project_id}')
+                        skipped_projects.append(project_id)
+                        custom_data["archivation_status"] = "failed"
+                        api.project.update_custom_data(project_id, custom_data)
                     pbar.update(1)
 
         sly.logger.info(
             f"Task accomplished, standby mode activated. The next check will be in {sleep_days} day(s)"
         )
+        if skipped_projects:
+            sly.logger.warning(f"Check this list of Porjects that failed to archive before the next run: {skipped_projects}")            
         time.sleep(sleep_time)
 
 
