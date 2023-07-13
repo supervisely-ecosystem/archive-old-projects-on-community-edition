@@ -11,7 +11,6 @@ from supervisely.io.fs import (
 from dotenv import load_dotenv
 import dropbox
 import requests
-import tarfile
 from dropbox_content_hasher import StreamHasher, DropboxContentHasher
 
 
@@ -146,43 +145,6 @@ def is_project_archived(project_info):
         return False
 
 
-def create_multivolume_archive(temp_dir, storage_dir, max_archive_size):
-    file_name = temp_dir.split("/")[-1]
-    files = []
-    current_archive_files = []
-    archive_names = set()
-    part_num = 0
-
-    for dirpath, _, filenames in os.walk(temp_dir):
-        for filename in filenames:
-            files.append(os.path.join(dirpath, filename))
-
-    files.sort(key=lambda f: os.path.getsize(f))
-
-    for file in files:
-        if (
-            sum(os.path.getsize(f) for f in current_archive_files) + os.path.getsize(file)
-            > max_archive_size
-        ):
-            part_num += 1
-            archive_name = f"{storage_dir}/{file_name}.part{part_num:03}.tar"
-            archive_names.add(archive_name)
-            with tarfile.open(archive_name, "w") as archive:
-                for f in current_archive_files:
-                    archive.add(f, f.replace(temp_dir, ""))
-            current_archive_files = []
-
-        current_archive_files.append(file)
-
-    part_num += 1
-    archive_name = f"{storage_dir}/{file_name}.part{part_num:03}.tar"
-    archive_names.add(archive_name)
-    with tarfile.open(archive_name, "w") as archive:
-        for f in current_archive_files:
-            archive.add(f, f.replace(temp_dir, ""))
-    return archive_names
-
-
 def create_folder_on_dropbox(dbx: dropbox.Dropbox):
     task_id = os.getenv("TASK_ID")
     parent = "/supervisely_project_archives"
@@ -212,15 +174,15 @@ def create_folder_on_dropbox(dbx: dropbox.Dropbox):
     return folder_path
 
 
-def upload_via_session_to_dropbox(archive_path, name, chunk_size, dbx, destination):
+def upload_via_session_to_dropbox(archive_path, chunk_size, dbx, destination):
     with open(archive_path, "rb") as archive:
         file_size = os.path.getsize(archive_path)
 
         if chunk_size >= file_size:
             # upload_chunk_size = (file_size // 2) // multiplicity * multiplicity
             chunk_size = file_size // 2
-        name = str(name)
-        upload_path = f"{destination}/{name}.tar"
+        name = archive_path.split("/")[-1]
+        upload_path = f"{destination}/{name}"
 
         hasher = DropboxContentHasher()
         wrapped_archive = StreamHasher(archive, hasher)
@@ -264,7 +226,7 @@ def upload_via_session_to_dropbox(archive_path, name, chunk_size, dbx, destinati
         return upload_path, hash_compare_results
 
 
-def upload_archive_no_split(archive_path, project_id, chunk_size, dbx, destination_folder):
+def upload_archive_no_split(archive_path, chunk_size, dbx, destination_folder):
     while True:
         try:
             (
@@ -272,7 +234,6 @@ def upload_archive_no_split(archive_path, project_id, chunk_size, dbx, destinati
                 hash_compare_results,
             ) = upload_via_session_to_dropbox(
                 archive_path,
-                project_id,
                 chunk_size,
                 dbx,
                 destination_folder,
@@ -280,6 +241,7 @@ def upload_archive_no_split(archive_path, project_id, chunk_size, dbx, destinati
             link_to_restore = dbx.sharing_create_shared_link(upload_path).url
             break
         except requests.exceptions.ConnectionError:
+            project_id = archive_path.split("/")[-1].split(".")[0]
             sly.logger.warning(
                 f"Connection lost while uploading project [ID: {project_id}] archive"
             )
@@ -291,10 +253,7 @@ def upload_archive_volumes(parts, chunk_size, dbx, destination_folder):
     sorted_parts = sorted(list(parts))
     hash_compare_results = list()
     for part in sorted_parts:
-        part_name = part.split("/")[-1].replace(".tar", "")
-        _, hash_compare_result = upload_archive_no_split(
-            part, part_name, chunk_size, dbx, destination_folder
-        )
+        _, hash_compare_result = upload_archive_no_split(part, chunk_size, dbx, destination_folder)
         hash_compare_results.append(hash_compare_result)
     hash_compare_results = all(hash_compare_results)
     link_to_restore = dbx.sharing_create_shared_link(destination_folder).url
@@ -312,25 +271,26 @@ def compare_hashes(hash1, hash2):
 
 
 def set_project_archived(project_id, hash_compare_results, link_to_restore):
-    
     if is_project_archived(api.project.get_info_by_id(project_id)):
-        sly.logger.warning(f"Skip adding URL for project {project_id}, this project is already archived")
+        sly.logger.warning(
+            f"Skip adding URL for project [ID: {project_id}], this project is already archived"
+        )
         shared_link_metadata = dbx.sharing_get_shared_link_metadata(link_to_restore)
         dbx.files_delete_v2(shared_link_metadata.path_lower)
         return
     if hash_compare_results:
         api.project.archive(project_id, link_to_restore)
-        sly.logger.info(f"Project [ID: {project_id}] archived, data removed from Ecosystem")
+        sly.logger.info(f"Project [ID: {project_id}] archived, data moved to Dropbox")
     else:
         if isinstance(link_to_restore, set):
             sly.logger.warning(
-                f"Project [ID: {project_id}] data will not be removed from Ecosystem due to hash mismatch."
+                f"Project [ID: {project_id}] data will not be moved to Dropbox due to hash mismatch."
             )
             for link in link_to_restore:
                 sly.logger.warning(f"Please check the uploaded part of data at [{link}]")
         else:
             sly.logger.warning(
-                f"Project [ID: {project_id}] data will not be removed from Ecosystem due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
+                f"Project [ID: {project_id}] data will not be moved to Dropbox due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
             )
 
 
@@ -351,20 +311,31 @@ def collect_project_ids():
     return choosen_projects
 
 
+def get_projects_size(project_ids):
+    batch_size = 0
+    project_size_map = {}
+    for project_id in project_ids:
+        size = round(int(api.project.get_info_by_id(project_id).size) / MB, 2)
+        batch_size += size
+        project_size_map[project_id] = size
+    project_size_map["batch_size"] = round(batch_size, 2)
+    return project_size_map
+
+
 def archive_project(project_id):
-    sly.logger.info("-------------------------------------------------")
+    sly.logger.info(" ")
     sly.logger.info(f"Starting to archive project [ID: {project_id}] ")
     temp_dir = os.path.join(storage_dir, str(project_id))
-    temp_dir = temp_dir.replace("\\", "/")    
+    temp_dir = temp_dir.replace("\\", "/")
     project_type = api.project.get_info_by_id(project_id).type
     download_project_by_type(project_type, api, project_id, temp_dir)
-    archive_path = temp_dir + ".tar" 
-        
+    archive_path = temp_dir + ".tar"
+
     if get_directory_size(temp_dir) >= max_archive_size:
         sly.logger.info(
             "The project takes up more space than the data transfer limits allow, so it will be split into several parts and placed in a separate Dropbox project folder."
         )
-        tars_to_upload = create_multivolume_archive(temp_dir, storage_dir, max_archive_size)
+        tars_to_upload = set(archive_directory(temp_dir, archive_path, max_archive_size))
         sly.logger.info(f"The number of archives: {len(tars_to_upload)}")
     else:
         archive_directory(temp_dir, archive_path)
@@ -387,7 +358,6 @@ def archive_project(project_id):
     else:
         link_to_restore, hash_compare_results = upload_archive_no_split(
             tars_to_upload,
-            project_id,
             chunk_size,
             dbx,
             destination_folder,
@@ -405,43 +375,82 @@ dbx = auth_to_dropbox()
 destination_folder = create_folder_on_dropbox(dbx)
 
 
+class TooManyExceptions(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
+
+
 def main():
     while True:
-        project_ids = collect_project_ids()        
-        random.shuffle(project_ids)
+        project_ids = collect_project_ids()
+        project_size_map = get_projects_size(project_ids)
+        batch_size = project_size_map.get("batch_size")
+        currently_processed_size = 0
+        exception_counts = 0
         skipped_projects = []
         task_id = api.task_id
+
+        random.shuffle(project_ids)
+
         if len(project_ids) != 0:
             with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
                 for project_id in project_ids:
-                    try:                        
-                        custom_data = api.project.get_info_by_id(project_id).custom_data
-                        if custom_data.get("archivation_status") == "in_progress":
-                            ar_task_id = custom_data.get("archivation_task_id")
-                            sly.logger.info(
-                                f"Skipping project {project_id} that is currently being archived by another App instance with ID: {ar_task_id}"
-                            )
-                            pbar.update(1)
-                            continue
+                    if exception_counts > 3:
+                        raise TooManyExceptions(
+                            "The maximum number of missed projects in a row has been reached, apllication is interrupted"
+                        )
+
+                    exception_happened = False
+                    custom_data = api.project.get_info_by_id(project_id).custom_data
+                    if custom_data.get("archivation_status") in ("in_progress", "completed"):
+                        ar_task_id = custom_data.get("archivation_task_id")
+                        sly.logger.info(" ")
+                        sly.logger.info(
+                            f"Skipping project [ID: {project_id}]. Archived by App instance with ID: {ar_task_id}"
+                        )
+                        currently_processed_size += project_size_map.get(project_id)
+                        sly.logger.info(
+                            f"Processed data size: {round(currently_processed_size, 2)}/{batch_size} MB"
+                        )
+                    else:
                         custom_data["archivation_status"] = "in_progress"
                         custom_data["archivation_task_id"] = task_id
                         api.project.update_custom_data(project_id, custom_data)
-                        archive_project(project_id)
-                        custom_data["archivation_status"] = "completed"
-                        api.project.update_custom_data(project_id, custom_data)
-                    except Exception as e:                        
-                        sly.logger.error(f'{e}')
-                        sly.logger.warning(f'Process skipped for Project with ID: {project_id}')
-                        skipped_projects.append(project_id)
-                        custom_data["archivation_status"] = "failed"
-                        api.project.update_custom_data(project_id, custom_data)
+                        try:
+                            archive_project(project_id)
+                        except Exception as e:
+                            sly.logger.error(f"{e}")
+                            sly.logger.warning(
+                                f"Process skipped for project [ID: {project_id}]. Status in custom data set to: failed"
+                            )
+                            skipped_projects.append(project_id)
+                            custom_data["archivation_status"] = "failed"
+                            api.project.update_custom_data(project_id, custom_data)
+                            exception_happened = True
+                            exception_counts += 1
+                            currently_processed_size += project_size_map.get(project_id)
+                            sly.logger.info(
+                                f"Processed data size: {round(currently_processed_size, 2)}/{batch_size} MB"
+                            )
+                        if not exception_happened:
+                            exception_counts = 0
+                            custom_data["archivation_status"] = "completed"
+                            api.project.update_custom_data(project_id, custom_data)
+                            currently_processed_size += project_size_map.get(project_id)
+                            sly.logger.info(
+                                f"Processed data size: {round(currently_processed_size, 2)}/{batch_size} MB"
+                            )
+
                     pbar.update(1)
 
-        sly.logger.info(
-            f"Task accomplished, standby mode activated. The next check will be in {sleep_days} day(s)"
-        )
+        sly.logger.info("Task accomplished, STANDBY mode activated.")
+        sly.logger.info(f"The next check will be in {sleep_days} day(s)")
+
         if skipped_projects:
-            sly.logger.warning(f"Check this list of Porjects that failed to archive before the next run: {skipped_projects}")            
+            sly.logger.warning(f"FAILED PROJECTS: {skipped_projects}")
+            sly.logger.warning(f"Check them before the next run!")
+
         time.sleep(sleep_time)
 
 
