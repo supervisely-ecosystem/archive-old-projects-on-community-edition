@@ -1,4 +1,6 @@
 .venv
 __pycache__
 supervisely
-.vscode
+dropbox.env
+app_data
+app_cache
