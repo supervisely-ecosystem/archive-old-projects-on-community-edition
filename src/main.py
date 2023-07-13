@@ -324,7 +324,7 @@ def get_projects_size(project_ids):
         
 
 def archive_project(project_id):
-    sly.logger.info("-------------------------------------------------")
+    sly.logger.info(" ")
     sly.logger.info(f"Starting to archive project [ID: {project_id}] ")
     temp_dir = os.path.join(storage_dir, str(project_id))
     temp_dir = temp_dir.replace("\\", "/")    
@@ -375,43 +375,63 @@ def archive_project(project_id):
 dbx = auth_to_dropbox()
 destination_folder = create_folder_on_dropbox(dbx)
 
+class TooManyExceptions(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
+    
 
 def main():
     while True:
         project_ids = collect_project_ids()    
         project_size_map = get_projects_size(project_ids)
         batch_size = project_size_map.get('batch_size')
-        currently_processed_size = 0 
-        random.shuffle(project_ids)
+        currently_processed_size = 0
+        exception_counts = 0        
         skipped_projects = []
         task_id = api.task_id
+        
+        random.shuffle(project_ids)
+        random.shuffle(project_ids)
+        
         if len(project_ids) != 0:
             with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
                 for project_id in project_ids:
-                    try:                        
-                        custom_data = api.project.get_info_by_id(project_id).custom_data
-                        if custom_data.get("archivation_status") == "in_progress":
-                            ar_task_id = custom_data.get("archivation_task_id")
-                            sly.logger.info(
-                                f"Skipping project {project_id} that is currently being archived by another App instance with ID: {ar_task_id}"
-                            )
-                            currently_processed_size += project_size_map.get(project_id)
-                            sly.logger.info(f"Processed amount of overall data: {currently_processed_size}/{batch_size} MB")
-                        else:
-                            custom_data["archivation_status"] = "in_progress"
-                            custom_data["archivation_task_id"] = task_id
-                            api.project.update_custom_data(project_id, custom_data)
+                    if exception_counts > 3:
+                        raise TooManyExceptions("The maximum number of missed projects in a row has been reached, apllication is interrupted")
+                    exception_happened = False                                           
+                    custom_data = api.project.get_info_by_id(project_id).custom_data
+                    if custom_data.get("archivation_status") == "in_progress":
+                        ar_task_id = custom_data.get("archivation_task_id")
+                        sly.logger.info(" ")
+                        sly.logger.info(
+                            f"Skipping project [ID: {project_id}] that is currently being archived by another App instance with ID: {ar_task_id}"
+                        )
+                        currently_processed_size += project_size_map.get(project_id)
+                        sly.logger.info(f"Processed amount of overall data: {round(currently_processed_size, 2)}/{batch_size} MB")
+                    else:
+                        custom_data["archivation_status"] = "in_progress"
+                        custom_data["archivation_task_id"] = task_id
+                        api.project.update_custom_data(project_id, custom_data)
+                        try:
                             archive_project(project_id)
+                        except Exception as e:                        
+                            sly.logger.error(f'{e}')
+                            sly.logger.warning(f'Process skipped for Project with ID: {project_id}')
+                            skipped_projects.append(project_id)
+                            custom_data["archivation_status"] = "failed"
+                            api.project.update_custom_data(project_id, custom_data)
+                            exception_happened = True
+                            exception_counts += 1                            
+                            currently_processed_size += project_size_map.get(project_id)
+                            sly.logger.info(f"Processed amount of overall data: {round(currently_processed_size, 2)}/{batch_size} MB")
+                        if not exception_happened:
+                            exception_counts = 0
                             custom_data["archivation_status"] = "completed"
                             api.project.update_custom_data(project_id, custom_data)
                             currently_processed_size += project_size_map.get(project_id)
-                            sly.logger.info(f"Processed amount of overall data: {currently_processed_size}/{batch_size} MB")
-                    except Exception as e:                        
-                        sly.logger.error(f'{e}')
-                        sly.logger.warning(f'Process skipped for Project with ID: {project_id}')
-                        skipped_projects.append(project_id)
-                        custom_data["archivation_status"] = "failed"
-                        api.project.update_custom_data(project_id, custom_data)
+                            sly.logger.info(f"Processed amount of overall data: {round(currently_processed_size, 2)}/{batch_size} MB")
+                                                                          
                     pbar.update(1)
 
         sly.logger.info(
