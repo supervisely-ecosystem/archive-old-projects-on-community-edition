@@ -401,7 +401,7 @@ def main():
                         raise TooManyExceptions("The maximum number of missed projects in a row has been reached, apllication is interrupted")
                     exception_happened = False                                           
                     custom_data = api.project.get_info_by_id(project_id).custom_data
-                    if custom_data.get("archivation_status") == "in_progress":
+                    if custom_data.get("archivation_status") in ("in_progress", "completed") :
                         ar_task_id = custom_data.get("archivation_task_id")
                         sly.logger.info(" ")
                         sly.logger.info(
