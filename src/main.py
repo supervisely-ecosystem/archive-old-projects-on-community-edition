@@ -121,16 +121,15 @@ def filter_by_date(projects_info):
 
 
 def download_project_by_type(project_type, api, project_id, temp_dir):
-    if project_type == "images":
-        sly.Project.download(api, project_id=project_id, dest_dir=temp_dir)
-    elif project_type == "videos":
-        sly.VideoProject.download(api, project_id=project_id, dest_dir=temp_dir)
-    elif project_type == "volumes":
-        sly.VolumeProject.download(api, project_id=project_id, dest_dir=temp_dir)
-    elif project_type == "point_clouds":
-        sly.PointcloudProject.download(api, project_id=project_id, dest_dir=temp_dir)
-    elif project_type == "point_cloud_episodes":
-        sly.PointcloudEpisodeProject.download(api, project_id=project_id, dest_dir=temp_dir)
+    project_classes = {
+        "images": sly.Project,
+        "videos": sly.VideoProject,
+        "volumes": sly.VolumeProject,
+        "point_clouds": sly.PointcloudProject,
+        "point_cloud_episodes": sly.PointcloudEpisodeProject,
+    }
+    project_class = project_classes[project_type]
+    project_class.download(api, project_id=project_id, dest_dir=temp_dir)
 
 
 def is_project_archived(project_info):
@@ -266,14 +265,16 @@ def compare_hashes(hash1, hash2):
         return False
 
 
-def set_project_archived(project_id, hash_compare_results, link_to_restore):
-    if is_project_archived(api.project.get_info_by_id(project_id)):
+def set_project_archived(project_id, project_info, hash_compare_results, link_to_restore):
+    # remove??
+    if is_project_archived(project_info):
         sly.logger.warning(
             f"Skip adding URL for project [ID: {project_id}], this project is already archived"
         )
         shared_link_metadata = dbx.sharing_get_shared_link_metadata(link_to_restore)
         dbx.files_delete_v2(shared_link_metadata.path_lower)
         return
+    ###
     if hash_compare_results:
         api.project.archive(project_id, link_to_restore)
         sly.logger.info(f"Project [ID: {project_id}] archived, data moved to Dropbox")
@@ -290,7 +291,7 @@ def set_project_archived(project_id, hash_compare_results, link_to_restore):
             )
 
 
-def collect_project_ids():
+def collect_project_ids():  # to be replaced with API
     choosen_projects = []
     teams_infos = choose_teams()
     selected_project_types = choose_project_types()
@@ -300,20 +301,20 @@ def collect_project_ids():
             projects_info = api.project.get_list(workspace_info.id)
             projects_to_archive = filter_by_date(projects_info)
             for project_id in projects_to_archive:
-                project_info = api.project.get_info_by_id(project_id)
+                project_info = api.project.get_info_by_id(project_id)  # ???
                 project_archived = is_project_archived(project_info)
                 if project_info.type in selected_project_types and not project_archived:
                     choosen_projects.append(project_id)
     return choosen_projects
 
 
-def archive_project(project_id):
+def archive_project(project_id, project_info):
     sly.logger.info(" ")
     sly.logger.info(
-        f"Archiving project [ID: {project_id}] size: {round(int(api.project.get_info_by_id(project_id).size) / MB, 2)} MB"
+        f"Archiving project [ID: {project_id}] size: {round(int(project_info.size) / GB, 1)} GB"
     )
     temp_dir = os.path.join(storage_dir, str(project_id))
-    project_type = api.project.get_info_by_id(project_id).type
+    project_type = project_info.type
     download_project_by_type(project_type, api, project_id, temp_dir)
     archive_path = temp_dir + ".tar"
 
@@ -354,7 +355,7 @@ def archive_project(project_id):
         f"Uploaded successfully [ID: {project_id}] | Link to restore: {link_to_restore}"
     )
 
-    set_project_archived(project_id, hash_compare_results, link_to_restore)
+    set_project_archived(project_id, project_info, hash_compare_results, link_to_restore)
 
 
 dbx = auth_to_dropbox()
@@ -385,7 +386,8 @@ def main():
                         )
 
                     exception_happened = False
-                    custom_data = api.project.get_info_by_id(project_id).custom_data
+                    project_info = api.project.get_info_by_id(project_id)
+                    custom_data = project_info.custom_data
                     if custom_data.get("archivation_status") in ("in_progress", "completed"):
                         ar_task_id = custom_data.get("archivation_task_id")
                         sly.logger.info(" ")
@@ -397,7 +399,7 @@ def main():
                         custom_data["archivation_task_id"] = task_id
                         api.project.update_custom_data(project_id, custom_data)
                         try:
-                            archive_project(project_id)
+                            archive_project(project_id, project_info)
                         except Exception as e:
                             sly.logger.error(f"{e}")
                             sly.logger.warning(
