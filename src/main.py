@@ -25,7 +25,7 @@ ALL_PROJECT_TYPES = ["images", "videos", "volumes", "point_clouds", "point_cloud
 days_storage = int(os.environ["modal.state.age"])
 sleep_days = int(os.environ["modal.state.sleep"])
 sleep_time = sleep_days * 86400
-del_date = datetime.now() - timedelta(days=days_storage)
+archive_date = datetime.now() - timedelta(days=days_storage)
 storage_dir = sly.app.get_data_dir()
 
 GB = 1024 * 1024 * 1024
@@ -98,9 +98,6 @@ def choose_teams():
         teams_infos = [api.team.get_info_by_id(team_id)]
     else:
         teams_infos = api.team.get_list()
-    team_lists = []
-    [team_lists.append(team[1]) for team in teams_infos]
-    sly.logger.info(f"Processing {len(team_lists)} team(s) : {team_lists}")
     return teams_infos
 
 
@@ -113,14 +110,13 @@ def choose_project_types():
     return selected_project_types
 
 
-def sort_by_date(projects_info):
-    projects_to_archive = {}
+def filter_by_date(projects_info):
+    projects_to_archive = []
     for project_info in projects_info:
-        project_date = project_info.updated_at
-        project_date = datetime.strptime(project_date, "%Y-%m-%dT%H:%M:%S.%fZ")
-        if project_date < del_date:
-            projects_to_archive[project_info.id] = project_info.name
-
+        project_update = project_info.updated_at
+        project_update = datetime.strptime(project_update, "%Y-%m-%dT%H:%M:%S.%fZ")
+        if project_update < archive_date:
+            projects_to_archive.append(project_info.id)
     return projects_to_archive
 
 
@@ -302,8 +298,8 @@ def collect_project_ids():
         workspaces_info = api.workspace.get_list(team_info.id)
         for workspace_info in workspaces_info:
             projects_info = api.project.get_list(workspace_info.id)
-            projects_to_del = sort_by_date(projects_info)
-            for project_id in projects_to_del.keys():
+            projects_to_archive = filter_by_date(projects_info)
+            for project_id in projects_to_archive:
                 project_info = api.project.get_info_by_id(project_id)
                 project_archived = is_project_archived(project_info)
                 if project_info.type in selected_project_types and not project_archived:
@@ -311,22 +307,12 @@ def collect_project_ids():
     return choosen_projects
 
 
-def get_projects_size(project_ids):
-    batch_size = 0
-    project_size_map = {}
-    for project_id in project_ids:
-        size = round(int(api.project.get_info_by_id(project_id).size) / MB, 2)
-        batch_size += size
-        project_size_map[project_id] = size
-    project_size_map["batch_size"] = round(batch_size, 2)
-    return project_size_map
-
-
 def archive_project(project_id):
     sly.logger.info(" ")
-    sly.logger.info(f"Starting to archive project [ID: {project_id}] ")
+    sly.logger.info(
+        f"Archiving project [ID: {project_id}] size: {round(int(api.project.get_info_by_id(project_id).size) / MB, 2)} MB"
+    )
     temp_dir = os.path.join(storage_dir, str(project_id))
-    temp_dir = temp_dir.replace("\\", "/")
     project_type = api.project.get_info_by_id(project_id).type
     download_project_by_type(project_type, api, project_id, temp_dir)
     archive_path = temp_dir + ".tar"
@@ -384,9 +370,6 @@ class TooManyExceptions(Exception):
 def main():
     while True:
         project_ids = collect_project_ids()
-        project_size_map = get_projects_size(project_ids)
-        batch_size = project_size_map.get("batch_size")
-        currently_processed_size = 0
         exception_counts = 0
         skipped_projects = []
         task_id = api.task_id
@@ -409,10 +392,6 @@ def main():
                         sly.logger.info(
                             f"Skipping project [ID: {project_id}]. Archived by App instance with ID: {ar_task_id}"
                         )
-                        currently_processed_size += project_size_map.get(project_id)
-                        sly.logger.info(
-                            f"Processed data size: {round(currently_processed_size, 2)}/{batch_size} MB"
-                        )
                     else:
                         custom_data["archivation_status"] = "in_progress"
                         custom_data["archivation_task_id"] = task_id
@@ -429,18 +408,10 @@ def main():
                             api.project.update_custom_data(project_id, custom_data)
                             exception_happened = True
                             exception_counts += 1
-                            currently_processed_size += project_size_map.get(project_id)
-                            sly.logger.info(
-                                f"Processed data size: {round(currently_processed_size, 2)}/{batch_size} MB"
-                            )
                         if not exception_happened:
                             exception_counts = 0
                             custom_data["archivation_status"] = "completed"
                             api.project.update_custom_data(project_id, custom_data)
-                            currently_processed_size += project_size_map.get(project_id)
-                            sly.logger.info(
-                                f"Processed data size: {round(currently_processed_size, 2)}/{batch_size} MB"
-                            )
 
                     pbar.update(1)
 
