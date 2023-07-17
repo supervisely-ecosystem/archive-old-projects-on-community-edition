@@ -25,7 +25,7 @@ ALL_PROJECT_TYPES = ["images", "videos", "volumes", "point_clouds", "point_cloud
 days_storage = int(os.environ["modal.state.age"])
 sleep_days = int(os.environ["modal.state.sleep"])
 sleep_time = sleep_days * 86400
-del_date = datetime.now() - timedelta(days=days_storage)
+archive_date = datetime.now() - timedelta(days=days_storage)
 storage_dir = sly.app.get_data_dir()
 
 GB = 1024 * 1024 * 1024
@@ -98,9 +98,6 @@ def choose_teams():
         teams_infos = [api.team.get_info_by_id(team_id)]
     else:
         teams_infos = api.team.get_list()
-    team_lists = []
-    [team_lists.append(team[1]) for team in teams_infos]
-    sly.logger.info(f"Processing {len(team_lists)} team(s)")
     return teams_infos
 
 
@@ -114,13 +111,12 @@ def choose_project_types():
 
 
 def filter_by_date(projects_info):
-    projects_to_archive = {}
+    projects_to_archive = []
     for project_info in projects_info:
-        project_date = project_info.updated_at
-        project_date = datetime.strptime(project_date, "%Y-%m-%dT%H:%M:%S.%fZ")
-        if project_date < del_date:
-            projects_to_archive[project_info.id] = project_info.name
-
+        project_update = project_info.updated_at
+        project_update = datetime.strptime(project_update, "%Y-%m-%dT%H:%M:%S.%fZ")
+        if project_update < archive_date:
+            projects_to_archive.append(project_info.id)
     return projects_to_archive
 
 
@@ -302,8 +298,8 @@ def collect_project_ids():
         workspaces_info = api.workspace.get_list(team_info.id)
         for workspace_info in workspaces_info:
             projects_info = api.project.get_list(workspace_info.id)
-            projects_to_del = filter_by_date(projects_info)
-            for project_id in projects_to_del.keys():
+            projects_to_archive = filter_by_date(projects_info)
+            for project_id in projects_to_archive:
                 project_info = api.project.get_info_by_id(project_id)
                 project_archived = is_project_archived(project_info)
                 if project_info.type in selected_project_types and not project_archived:
