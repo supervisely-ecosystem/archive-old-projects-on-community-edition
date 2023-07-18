@@ -119,7 +119,7 @@ def get_project_infos():
         kwargs["to_day"] = range_days
     if not skip_exported:
         kwargs["skip_exported"] = False
-
+    kwargs["sort"] = "updatedAt"
     project_infos = api.project.get_archivation_list(**kwargs)
     return project_infos
 
