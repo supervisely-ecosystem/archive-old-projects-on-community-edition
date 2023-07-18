@@ -23,9 +23,14 @@ api = sly.Api.from_env()
 
 ALL_PROJECT_TYPES = ["images", "videos", "volumes", "point_clouds", "point_cloud_episodes"]
 range_state = os.environ.get("modal.state.setRange", True)
+sly.logger.info("Run SETTINGS:")
+sly.logger.info(f"range_state: {range_state}")
 range_type = os.environ.get("modal.state.rangeType", "To")
+sly.logger.info(f"range_type: {range_type}")
 range_days = int(os.environ.get("modal.state.rangeDay", 30))
+sly.logger.info(f"range_days: {range_days}")
 skip_exported = os.environ.get("modal.state.skipExported", True)
+sly.logger.info(f"skip_exported: {skip_exported}")
 sleep_days = int(os.environ.get("modal.state.sleep", 2))
 sleep_time = sleep_days * 86400
 storage_dir = sly.app.get_data_dir()
