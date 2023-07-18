@@ -22,16 +22,11 @@ if sly.is_development():
 api = sly.Api.from_env()
 
 ALL_PROJECT_TYPES = ["images", "videos", "volumes", "point_clouds", "point_cloud_episodes"]
-range_state = os.environ.get("modal.state.setRange", True)
-sly.logger.info("Run SETTINGS:")
-sly.logger.info(f"range_state: {range_state}")
-range_type = os.environ.get("modal.state.rangeType", "To")
-sly.logger.info(f"range_type: {range_type}")
-range_days = int(os.environ.get("modal.state.rangeDay", 30))
-sly.logger.info(f"range_days: {range_days}")
-skip_exported = os.environ.get("modal.state.skipExported", True)
-sly.logger.info(f"skip_exported: {skip_exported}")
-sleep_days = int(os.environ.get("modal.state.sleep", 2))
+range_state = bool(strtobool(os.environ.get("modal.state.setRange")))
+range_type = os.environ.get("modal.state.rangeType")
+range_days = int(os.environ.get("modal.state.rangeDay"))
+skip_exported = bool(strtobool(os.environ.get("modal.state.skipExported")))
+sleep_days = int(os.environ.get("modal.state.sleep"))
 sleep_time = sleep_days * 86400
 storage_dir = sly.app.get_data_dir()
 
@@ -44,7 +39,7 @@ max_archive_size = 348 * GB
 
 def download_env_file():
     initial_team_id = sly.env.team_id()
-    team_files_env_file_path = os.environ["context.slyFile"]
+    team_files_env_file_path = os.environ.get("context.slyFile")
     env_file_name = sly.env.file()
     app_env_file_path = os.path.join(storage_dir, env_file_name)
     api.file.download(initial_team_id, team_files_env_file_path, app_env_file_path)
@@ -122,8 +117,9 @@ def get_project_infos():
         kwargs["from_day"] = range_days
     if range_state and range_type == "To":
         kwargs["to_day"] = range_days
-    if skip_exported:
-        kwargs["skip_exported"] = True
+    if not skip_exported:
+        kwargs["skip_exported"] = False
+
     project_infos = api.project.get_archivation_list(**kwargs)
     return project_infos
 
@@ -138,14 +134,6 @@ def download_project_by_type(project_type, api, project_id, temp_dir):
     }
     project_class = project_classes[project_type]
     project_class.download(api, project_id=project_id, dest_dir=temp_dir)
-
-
-def is_project_archived(project_info):
-    try:
-        project_info.backup_archive["exportedAt"]
-        return True
-    except:
-        return False
 
 
 def create_folder_on_dropbox(dbx: dropbox.Dropbox):
@@ -375,9 +363,11 @@ def main():
                     for project_info in slice_data:
                         if workspace_id:
                             if project_info.workspace_id != workspace_id:
+                                pbar.update(1)
                                 continue
 
                         if project_info.type not in project_types:
+                            pbar.update(1)
                             continue
 
                         if exception_counts > 3:
