@@ -8,9 +8,12 @@
   "main_script": "src/main.py",
   "modal_template": "src/modal.html",
   "modal_template_state": {
-    "age": 30,
+    "setRange": true,
+    "rangeType": "To",
+    "rangeDay": 30,
+    "skipExported": true,
     "sleep": 2,
-    "allTeams": false,
+    "allWorkspaces": false,
     "allPTypes": true,
     "items": [
       {
