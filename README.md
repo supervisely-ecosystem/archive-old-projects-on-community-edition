@@ -60,11 +60,12 @@ After the archiving process is complete, the application will continue to run in
 1. Upload "**dropbox.env**" to "Team Files" in Ecosystem.
 2. To run the application, right-click on the file and choose "Run App" from the context menu.
 3. Select "Old Projects Archivator" from the list of applications and run it.
-4. Choose the team for which you want to archive old projects, or select all teams using the checkbox.
+4. Choose the team and workspace for which you want to archive old projects, or select "All available workspaces" using the checkbox.
 5. Choose the types of projects for which you want to archive the old ones, and deselect the "All types" checkbox to see the selector.
-6. Set the number of days for the project age. Any project older than this period will be archived.
-7. Set the sleep time in days after which the application will resume its work.
-8. Finally, run the application.
+6. Set the sleep time in days after which the application will resume its work.
+7. Set the period equal to the number of days from today to the past. If the project has not been updated during (To) or before (From) this period, it will be added to the list. Or uncheck "Set range" to archive all available projects.
+8. ⚠️ Don't change advanced options if you don't know what they do!
+9. Finally, run the application.
    <img src="https://user-images.githubusercontent.com/115161827/229535768-c6eb4c21-7378-47af-a040-48e44785ee29.gif" />
 
 The application will check projects, select those that meet the specified criteria based on the date, and process each one sequentially. During processing, a directory named `archive_{id}` will be created in the `supervisely_project_archives` directory of Dropbox, where `id` is the number of the task that the application is working on. Project archives named with the project `id` will be uploaded to this directory.
