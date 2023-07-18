@@ -22,10 +22,12 @@ if sly.is_development():
 api = sly.Api.from_env()
 
 ALL_PROJECT_TYPES = ["images", "videos", "volumes", "point_clouds", "point_cloud_episodes"]
-days_storage = int(os.environ["modal.state.age"])
-sleep_days = int(os.environ["modal.state.sleep"])
+range_state = os.environ.get("modal.state.setRange", True)
+range_type = os.environ.get("modal.state.rangeType", "To")
+range_days = int(os.environ.get("modal.state.rangeDay", 30))
+skip_exported = os.environ.get("modal.state.skipExported", True)
+sleep_days = int(os.environ.get("modal.state.sleep"), 2)
 sleep_time = sleep_days * 86400
-archive_date = datetime.now() - timedelta(days=days_storage)
 storage_dir = sly.app.get_data_dir()
 
 GB = 1024 * 1024 * 1024
@@ -92,32 +94,33 @@ def auth_to_dropbox():
     return dbx
 
 
-def choose_teams():
-    if not bool(strtobool(os.environ["modal.state.allTeams"])):
-        team_id = os.environ["modal.state.teamId"]
-        teams_infos = [api.team.get_info_by_id(team_id)]
+def choose_workspace():
+    if not bool(strtobool(os.environ.get("modal.state.allWorkspaces"))):
+        wspace_id = int(os.environ.get("modal.state.wSpaceId"))
     else:
-        teams_infos = api.team.get_list()
-    return teams_infos
+        wspace_id = None
+    return wspace_id
 
 
 def choose_project_types():
-    if not bool(strtobool(os.environ["modal.state.allPTypes"])):
-        selected_project_types = os.environ["modal.state.types"]
+    if not bool(strtobool(os.environ.get("modal.state.allPTypes"))):
+        selected_project_types = os.environ.get("modal.state.types")
     else:
         selected_project_types = ALL_PROJECT_TYPES
     sly.logger.info(f"Processing Project type(s): {selected_project_types}")
     return selected_project_types
 
 
-def filter_by_date(projects_info):
-    projects_to_archive = []
-    for project_info in projects_info:
-        project_update = project_info.updated_at
-        project_update = datetime.strptime(project_update, "%Y-%m-%dT%H:%M:%S.%fZ")
-        if project_update < archive_date:
-            projects_to_archive.append(project_info.id)
-    return projects_to_archive
+def get_project_infos():
+    kwargs = {}
+    if range_state and range_type == "From":
+        kwargs["from_day"] = range_days
+    if range_state and range_type == "To":
+        kwargs["to_day"] = range_days
+    if skip_exported:
+        kwargs["skip_exported"] = True
+    project_infos = api.project.get_archivation_list(**kwargs)
+    return project_infos
 
 
 def download_project_by_type(project_type, api, project_id, temp_dir):
@@ -266,15 +269,6 @@ def compare_hashes(hash1, hash2):
 
 
 def set_project_archived(project_id, project_info, hash_compare_results, link_to_restore):
-    # remove??
-    if is_project_archived(project_info):
-        sly.logger.warning(
-            f"Skip adding URL for project [ID: {project_id}], this project is already archived"
-        )
-        shared_link_metadata = dbx.sharing_get_shared_link_metadata(link_to_restore)
-        dbx.files_delete_v2(shared_link_metadata.path_lower)
-        return
-    ###
     if hash_compare_results:
         api.project.archive(project_id, link_to_restore)
         sly.logger.info(f"Project [ID: {project_id}] archived, data moved to Dropbox")
@@ -289,23 +283,6 @@ def set_project_archived(project_id, project_info, hash_compare_results, link_to
             sly.logger.warning(
                 f"Project [ID: {project_id}] data will not be moved to Dropbox due to hash mismatch. Please check the uploaded archive data at [{link_to_restore}]"
             )
-
-
-def collect_project_ids():  # to be replaced with API
-    choosen_projects = []
-    teams_infos = choose_teams()
-    selected_project_types = choose_project_types()
-    for team_info in teams_infos:
-        workspaces_info = api.workspace.get_list(team_info.id)
-        for workspace_info in workspaces_info:
-            projects_info = api.project.get_list(workspace_info.id)
-            projects_to_archive = filter_by_date(projects_info)
-            for project_id in projects_to_archive:
-                project_info = api.project.get_info_by_id(project_id)  # ???
-                project_archived = is_project_archived(project_info)
-                if project_info.type in selected_project_types and not project_archived:
-                    choosen_projects.append(project_id)
-    return choosen_projects
 
 
 def archive_project(project_id, project_info):
@@ -370,58 +347,67 @@ class TooManyExceptions(Exception):
 
 def main():
     while True:
-        project_ids = collect_project_ids()
-        exception_counts = 0
-        skipped_projects = []
+        project_infos = get_project_infos()
+        workspace_id = choose_workspace()
+        project_types = choose_project_types()
         task_id = api.task_id
 
-        random.shuffle(project_ids)
+        exception_counts = 0
+        failed_projects = []
 
-        if len(project_ids) != 0:
-            with sly.tqdm_sly(total=len(project_ids), desc="Archiving projects") as pbar:
-                for project_id in project_ids:
+        random.shuffle(project_infos)
+
+        if len(project_infos) != 0:
+            with sly.tqdm_sly(total=len(project_infos), desc="Archiving projects") as pbar:
+                for project_info in project_infos:
+                    if workspace_id:
+                        if project_info.workspace_id != workspace_id:
+                            continue
+
+                    if project_info.type not in project_types:
+                        continue
+
                     if exception_counts > 3:
                         raise TooManyExceptions(
                             "The maximum number of missed projects in a row has been reached, apllication is interrupted"
                         )
 
                     exception_happened = False
-                    project_info = api.project.get_info_by_id(project_id)
-                    custom_data = project_info.custom_data
+                    custom_data = api.project.get_info_by_id(project_info.id).custom_data
                     if custom_data.get("archivation_status") in ("in_progress", "completed"):
                         ar_task_id = custom_data.get("archivation_task_id")
                         sly.logger.info(" ")
                         sly.logger.info(
-                            f"Skipping project [ID: {project_id}]. Archived by App instance with ID: {ar_task_id}"
+                            f"Skipping project [ID: {project_info.id}]. Archived by App instance with ID: {ar_task_id}"
                         )
                     else:
                         custom_data["archivation_status"] = "in_progress"
                         custom_data["archivation_task_id"] = task_id
-                        api.project.update_custom_data(project_id, custom_data)
+                        api.project.update_custom_data(project_info.id, custom_data)
                         try:
-                            archive_project(project_id, project_info)
+                            archive_project(project_info.id, project_info)
                         except Exception as e:
                             sly.logger.error(f"{e}")
                             sly.logger.warning(
-                                f"Process skipped for project [ID: {project_id}]. Status in custom data set to: failed"
+                                f"Process skipped for project [ID: {project_info.id}]. Status in custom data set to: failed"
                             )
-                            skipped_projects.append(project_id)
+                            failed_projects.append(project_info.id)
                             custom_data["archivation_status"] = "failed"
-                            api.project.update_custom_data(project_id, custom_data)
+                            api.project.update_custom_data(project_info.id, custom_data)
                             exception_happened = True
                             exception_counts += 1
                         if not exception_happened:
                             exception_counts = 0
                             custom_data["archivation_status"] = "completed"
-                            api.project.update_custom_data(project_id, custom_data)
+                            api.project.update_custom_data(project_info.id, custom_data)
 
                     pbar.update(1)
 
         sly.logger.info("Task accomplished, STANDBY mode activated.")
         sly.logger.info(f"The next check will be in {sleep_days} day(s)")
 
-        if skipped_projects:
-            sly.logger.warning(f"FAILED PROJECTS: {skipped_projects}")
+        if failed_projects:
+            sly.logger.warning(f"FAILED PROJECTS: {failed_projects}")
             sly.logger.warning(f"Check them before the next run!")
 
         time.sleep(sleep_time)
