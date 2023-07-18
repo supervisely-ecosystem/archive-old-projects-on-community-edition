@@ -4,13 +4,16 @@
   "version": "2.0.0",
   "categories": ["system"],
   "description": "Archive old projects on community",
-  "docker_image": "supervisely/base-py-sdk:6.72.70",
+  "docker_image": "supervisely/base-py-sdk:6.72.74",
   "main_script": "src/main.py",
   "modal_template": "src/modal.html",
   "modal_template_state": {
-    "age": 30,
+    "setRange": true,
+    "rangeType": "To",
+    "rangeDay": 30,
+    "skipExported": true,
     "sleep": 2,
-    "allTeams": false,
+    "allWorkspaces": false,
     "allPTypes": true,
     "items": [
       {
