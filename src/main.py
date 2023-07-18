@@ -26,7 +26,7 @@ range_state = os.environ.get("modal.state.setRange", True)
 range_type = os.environ.get("modal.state.rangeType", "To")
 range_days = int(os.environ.get("modal.state.rangeDay", 30))
 skip_exported = os.environ.get("modal.state.skipExported", True)
-sleep_days = int(os.environ.get("modal.state.sleep"), 2)
+sleep_days = int(os.environ.get("modal.state.sleep", 2))
 sleep_time = sleep_days * 86400
 storage_dir = sly.app.get_data_dir()
 
