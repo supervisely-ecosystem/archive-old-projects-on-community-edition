@@ -66,7 +66,7 @@
           ⚠️ All available projects will be archived
         </div>
         <div style="color: #7f858e; font-size: 13p" v-if="state.setRange">
-          Sets the number of days from today.
+          Sets the period equal to the number of days from today to the past.
         </div>
         <div
           style="color: #7f858e; font-size: 13p; margin: 0 0 4px 0"
@@ -82,7 +82,8 @@
           style="color: #7f858e; font-size: 13p; margin: 0 10px 0 8px"
           v-if="state.setRange"
         >
-          If you want to archive all project from now, just uncheck "Set range"
+          If you want to archive all available projects, just uncheck "Set
+          range"
         </div>
         <div style="margin: 10px 10px 10px 8px" v-if="state.setRange">
           <el-radio-group v-model="state.rangeType">
