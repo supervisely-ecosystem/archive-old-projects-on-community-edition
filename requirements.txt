@@ -1,2 +1,2 @@
-supervisely==6.72.70
+git+https://github.com/supervisely/supervisely.git@archivator-get-all-projects
 dropbox==11.36.2
