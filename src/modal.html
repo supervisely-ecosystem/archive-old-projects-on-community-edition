@@ -125,12 +125,16 @@
         >
           ⚠️ Works only if chosen both settings
         </div>
-        <div style="margin: 6px 0 0px 8px">
+        <div
+          class="container"
+          style="margin: 6px 0 0px 8px; display: flex; grid-gap: 6px"
+        >
           <el-select
             v-model="state.sType"
             v-if="!state.defSort"
             :multiple="false"
             :filterable="false"
+            class="element"
             ><el-option
               v-for="item in state.sortTypes"
               :key="item.value"
@@ -143,6 +147,7 @@
             v-if="!state.defSort"
             :multiple="false"
             :filterable="false"
+            class="element"
             ><el-option
               v-for="item in state.sortOrders"
               :key="item.value"
