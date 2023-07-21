@@ -62,24 +62,24 @@
         description=""
         style="margin: 16px 10px 0 0"
       >
-        <div style="color: #7f858e; font-size: 13p" v-if="!state.setRange">
+        <div style="color: #d10000; font-size: 13px" v-if="!state.setRange">
           ⚠️ All available projects will be archived
         </div>
-        <div style="color: #7f858e; font-size: 13p" v-if="state.setRange">
+        <div style="color: #7f858e; font-size: 13px" v-if="state.setRange">
           Sets the period equal to the number of days from today to the past.
         </div>
         <div
-          style="color: #7f858e; font-size: 13p; margin: 0 0 4px 0"
+          style="color: #7f858e; font-size: 13px; margin: 0 0 4px 0"
           v-if="state.setRange"
         >
           If the project has not been updated during (To) or before (From) this
           period, it will be added to the list:
         </div>
-        <el-checkbox style="margin: 10px 10px 0 8px" v-model="state.setRange"
+        <el-checkbox style="margin: 10px 10px 0px 8px" v-model="state.setRange"
           >Set range</el-checkbox
         >
         <div
-          style="color: #7f858e; font-size: 13p; margin: 0 10px 0 8px"
+          style="color: #7f858e; font-size: 13px; margin: 0 10px 4px 30px"
           v-if="state.setRange"
         >
           If you want to archive all available projects, just uncheck "Set
@@ -107,6 +107,59 @@
           v-model="state.skipExported"
           >Skip already archived</el-checkbox
         >
+        <div style="font-size: 14px; margin: 16px 0 4px 8px">Batch size</div>
+        <el-input-number
+          style="margin: 0 0 0 8px"
+          v-model="state.batchSize"
+          :min="1"
+          :max="500"
+          show-input
+        ></el-input-number>
+
+        <div style="font-size: 14px; margin: 16px 0 4px 8px">
+          Choose sorting
+        </div>
+        <div
+          style="color: #d10000; font-size: 13px; margin: 0px 0 4px 8px"
+          v-if="!state.defSort"
+        >
+          ⚠️ Works only if chosen both settings
+        </div>
+        <div style="margin: 6px 0 0px 8px">
+          <el-select
+            v-model="state.sType"
+            v-if="!state.defSort"
+            :multiple="false"
+            :filterable="false"
+            ><el-option
+              v-for="item in state.sortTypes"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            ></el-option>
+          </el-select>
+          <el-select
+            v-model="state.sOrder"
+            v-if="!state.defSort"
+            :multiple="false"
+            :filterable="false"
+            ><el-option
+              v-for="item in state.sortOrders"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            ></el-option>
+          </el-select>
+        </div>
+        <el-checkbox style="margin: 10px 10px 0 8px" v-model="state.defSort"
+          >Default sorting</el-checkbox
+        >
+        <div
+          style="color: #7f858e; font-size: 13px; margin: 0px 10px 4px 30px"
+          v-if="state.defSort"
+        >
+          Values: updatedAt - asc
+        </div>
       </sly-field>
     </div>
   </sly-card>
