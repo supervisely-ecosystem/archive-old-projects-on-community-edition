@@ -48,10 +48,9 @@ def download_env_file():
 
 
 def auth_to_dropbox():
-    # app_env_file_path = download_env_file()
+    app_env_file_path = download_env_file()
     sly.logger.info("Connecting to Dropbox...")
-    # load_dotenv(app_env_file_path)
-    load_dotenv("dropbox.env")
+    load_dotenv(app_env_file_path)
     try:
         refresh_token = str(os.environ["refresh_token"])
         app_key = str(os.environ["app_key"])
