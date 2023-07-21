@@ -11,10 +11,12 @@
     "setRange": true,
     "rangeType": "To",
     "rangeDay": 30,
+    "batchSize": 10,
     "skipExported": true,
     "sleep": 2,
     "allWorkspaces": false,
     "allPTypes": true,
+    "defSort": true,
     "items": [
       {
         "value": "images",
@@ -35,6 +37,26 @@
       {
         "value": "point_cloud_episodes",
         "label": "point_cloud_episodes"
+      }
+    ],
+    "sortTypes": [
+      {
+        "value": "updatedAt",
+        "label": "updatedAt"
+      },
+      {
+        "value": "size",
+        "label": "size"
+      }
+    ],
+    "sortOrders": [
+      {
+        "value": "asc",
+        "label": "asc"
+      },
+      {
+        "value": "desc",
+        "label": "desc"
       }
     ]
   },

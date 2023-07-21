@@ -27,6 +27,7 @@ range_type = os.environ.get("modal.state.rangeType")
 range_days = int(os.environ.get("modal.state.rangeDay"))
 skip_exported = bool(strtobool(os.environ.get("modal.state.skipExported")))
 sleep_days = int(os.environ.get("modal.state.sleep"))
+batch_size = int(os.environ.get("modal.state.batchSize"))
 sleep_time = sleep_days * 86400
 storage_dir = sly.app.get_data_dir()
 
@@ -111,7 +112,21 @@ def choose_project_types():
     return selected_project_types
 
 
-def get_project_infos():
+def choose_sorting():
+    if not bool(strtobool(os.environ.get("modal.state.defSort"))):
+        selected_sorting_type = os.environ.get("modal.state.sType")
+        selected_sorting_order = os.environ.get("modal.state.sOrder")
+        sly.logger.info(
+            f"Processing projects sorted by type: {selected_sorting_type} and order: {selected_sorting_order}"
+        )
+    else:
+        selected_sorting_type = None
+        selected_sorting_order = None
+    sly.logger.info(f"Processing projects sorted by default")
+    return selected_sorting_type, selected_sorting_order
+
+
+def get_project_infos(sort_type, sort_order):
     kwargs = {}
     if range_state and range_type == "From":
         kwargs["from_day"] = range_days
@@ -119,7 +134,12 @@ def get_project_infos():
         kwargs["to_day"] = range_days
     if not skip_exported:
         kwargs["skip_exported"] = False
-    kwargs["sort"] = "updatedAt"
+
+    if sort_type and sort_order:
+        kwargs["sort"] = sort_type
+        kwargs["sort_order"] = sort_order
+    else:
+        kwargs["sort"] = "updatedAt"
     project_infos = api.project.get_archivation_list(**kwargs)
     return project_infos
 
@@ -133,7 +153,11 @@ def download_project_by_type(project_type, api, project_id, temp_dir):
         "point_cloud_episodes": sly.PointcloudEpisodeProject,
     }
     project_class = project_classes[project_type]
-    project_class.download(api, project_id=project_id, dest_dir=temp_dir)
+
+    if project_type in ["images", "point_clouds", "point_cloud_episodes"]:
+        project_class.download(api, project_id=project_id, dest_dir=temp_dir, batch_size=batch_size)
+    else:
+        project_class.download(api, project_id=project_id, dest_dir=temp_dir)
 
 
 def create_folder_on_dropbox(dbx: dropbox.Dropbox):
@@ -340,19 +364,21 @@ class TooManyExceptions(Exception):
 
 def main():
     while True:
-        project_infos = get_project_infos()
+        sort_type, sort_order = choose_sorting()
+        project_infos = get_project_infos(sort_type, sort_order)
         workspace_id = choose_workspace()
         project_types = choose_project_types()
         task_id = api.task_id
-
+        num_of_projects = len(project_infos)
+        num_of_processed_projects = 0
         exception_counts = 0
         failed_projects = []
 
         slice_size = 10
-        num_slices = (len(project_infos) + slice_size - 1) // slice_size
+        num_slices = (num_of_projects + slice_size - 1) // slice_size
 
-        if len(project_infos) != 0:
-            with sly.tqdm_sly(total=len(project_infos), desc="Archiving projects") as pbar:
+        if num_of_projects != 0:
+            with sly.tqdm_sly(total=num_of_projects, desc="Archiving projects") as pbar:
                 for i in range(num_slices):
                     start = i * slice_size
                     end = start + slice_size
@@ -364,10 +390,18 @@ def main():
                         if workspace_id:
                             if project_info.workspace_id != workspace_id:
                                 pbar.update(1)
+                                num_of_processed_projects += 1
+                                sly.logger.info(
+                                    f"Processed projects #{num_of_processed_projects} of {num_of_projects}"
+                                )
                                 continue
 
                         if project_info.type not in project_types:
                             pbar.update(1)
+                            num_of_processed_projects += 1
+                            sly.logger.info(
+                                f"Processed projects #{num_of_processed_projects} of {num_of_projects}"
+                            )
                             continue
 
                         if exception_counts > 3:
@@ -404,6 +438,10 @@ def main():
                                 custom_data["archivation_status"] = "completed"
                                 api.project.update_custom_data(project_info.id, custom_data)
 
+                        num_of_processed_projects += 1
+                        sly.logger.info(
+                            f"Processed projects #{num_of_processed_projects} of {num_of_projects}"
+                        )
                         pbar.update(1)
 
         sly.logger.info("Task accomplished, STANDBY mode activated.")
