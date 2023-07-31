@@ -1,73 +1,80 @@
 {
-  "name": "Archive Projects to Dropbox",
-  "type": "app",
-  "version": "2.0.0",
-  "categories": ["system"],
-  "description": "Archive old projects on community",
-  "docker_image": "supervisely/base-py-sdk:6.72.74",
-  "main_script": "src/main.py",
-  "modal_template": "src/modal.html",
-  "modal_template_state": {
-    "setRange": true,
-    "rangeType": "To",
-    "rangeDay": 30,
-    "batchSize": 10,
-    "skipExported": true,
-    "sleep": 2,
-    "allWorkspaces": false,
-    "allPTypes": true,
-    "defSort": true,
-    "items": [
-      {
-        "value": "images",
-        "label": "images"
-      },
-      {
-        "value": "videos",
-        "label": "videos"
-      },
-      {
-        "value": "volumes",
-        "label": "volumes"
-      },
-      {
-        "value": "point_clouds",
-        "label": "point_clouds"
-      },
-      {
-        "value": "point_cloud_episodes",
-        "label": "point_cloud_episodes"
-      }
+    "name": "Archive Projects to Dropbox",
+    "type": "app",
+    "version": "2.0.0",
+    "categories": [
+        "system"
     ],
-    "sortTypes": [
-      {
-        "value": "updatedAt",
-        "label": "updatedAt"
-      },
-      {
-        "value": "size",
-        "label": "size"
-      }
-    ],
-    "sortOrders": [
-      {
-        "value": "asc",
-        "label": "asc"
-      },
-      {
-        "value": "desc",
-        "label": "desc"
-      }
-    ]
-  },
-  "task_location": "workspace_tasks",
-  "headless": true,
-  "release": { "version": "v0.0.1", "name": "init" },
-  "slug": "sl/archive-old-projects",
-  "poster": "https://user-images.githubusercontent.com/115161827/229174933-2997232c-7ea2-465b-a743-c7863edbb189.png",
-  "icon": "https://user-images.githubusercontent.com/115161827/229124666-5766f7e8-a968-4be8-b876-c05458b871df.jpg",
-  "icon_cover": true,
-  "context_menu": {
-    "target": ["files_file"]
-  }
+    "description": "Archive old projects on community",
+    "docker_image": "supervisely/base-py-sdk:6.72.85",
+    "main_script": "src/main.py",
+    "modal_template": "src/modal.html",
+    "modal_template_state": {
+        "setRange": true,
+        "rangeType": "To",
+        "rangeDay": 30,
+        "batchSize": 10,
+        "skipExported": true,
+        "sleep": 2,
+        "allWorkspaces": false,
+        "allPTypes": true,
+        "defSort": true,
+        "items": [
+            {
+                "value": "images",
+                "label": "images"
+            },
+            {
+                "value": "videos",
+                "label": "videos"
+            },
+            {
+                "value": "volumes",
+                "label": "volumes"
+            },
+            {
+                "value": "point_clouds",
+                "label": "point_clouds"
+            },
+            {
+                "value": "point_cloud_episodes",
+                "label": "point_cloud_episodes"
+            }
+        ],
+        "sortTypes": [
+            {
+                "value": "updatedAt",
+                "label": "updatedAt"
+            },
+            {
+                "value": "size",
+                "label": "size"
+            }
+        ],
+        "sortOrders": [
+            {
+                "value": "asc",
+                "label": "asc"
+            },
+            {
+                "value": "desc",
+                "label": "desc"
+            }
+        ]
+    },
+    "task_location": "workspace_tasks",
+    "headless": true,
+    "release": {
+        "version": "v0.0.1",
+        "name": "init"
+    },
+    "slug": "sl/archive-old-projects",
+    "poster": "https://user-images.githubusercontent.com/115161827/229174933-2997232c-7ea2-465b-a743-c7863edbb189.png",
+    "icon": "https://user-images.githubusercontent.com/115161827/229124666-5766f7e8-a968-4be8-b876-c05458b871df.jpg",
+    "icon_cover": true,
+    "context_menu": {
+        "target": [
+            "files_file"
+        ]
+    }
 }
