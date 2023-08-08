@@ -8,6 +8,7 @@ from supervisely.io.fs import (
     silent_remove,
     get_directory_size,
 )
+from supervisely.io.json import dump_json_file
 from dotenv import load_dotenv
 import dropbox
 import requests
@@ -146,6 +147,64 @@ def get_project_infos(sort_type, sort_order):
     return project_infos
 
 
+def create_image_map(project_id):
+    hash_name_map = {"datasets": []}
+    hash_list = []
+    dataset_list = api.dataset.get_list(project_id)
+    for dataset in dataset_list:
+        dataset_dict = {"name": dataset.name, "images": []}
+        image_list = api.image.get_list(dataset.id)
+        for image in image_list:
+            image_dict = {"hash": image.hash, "name": image.name}
+            hash_list.append(image.hash)
+            dataset_dict["images"].append(image_dict)
+        hash_name_map["datasets"].append(dataset_dict)
+    return hash_name_map, hash_list
+
+
+def download_image_project(api: sly.Api, project_id, project_class, temp_dir, download_info):
+    imageset_url = api.project.check_imageset_backup(project_id)
+    imageset_url = imageset_url.get("imagesArchiveUrl", None)
+    image_map, hash_list = create_image_map(project_id)
+
+    if imageset_url is None:
+        temp_dir_images = os.path.join(temp_dir, "images")
+        temp_dir_anns = os.path.join(temp_dir, "anns")
+
+        hash_names = [hash_list[i].replace("/", "-") for i in range(len(hash_list))]
+        temp_dir_images_list = [
+            os.path.join(temp_dir_images, hash_name) for hash_name in hash_names
+        ]
+
+        api.image.download_paths_by_hashes(set(hash_list), temp_dir_images_list)
+
+        project_class.download(
+            api,
+            project_id=project_id,
+            dest_dir=temp_dir_anns,
+            batch_size=batch_size,
+            save_images=False,
+        )
+
+        dump_json_file(image_map, os.path.join(temp_dir_anns, "hash_name_map.json"))
+
+        download_info["temp_dir_files"] = temp_dir_images
+        download_info["temp_dir_anns"] = temp_dir_anns
+    else:
+        project_class.download(
+            api,
+            project_id=project_id,
+            dest_dir=temp_dir,
+            batch_size=batch_size,
+            save_images=False,
+        )
+
+        dump_json_file(image_map, os.path.join(temp_dir, "hash_name_map.json"))
+
+        download_info["temp_dir_anns"] = temp_dir
+    download_info["backup_url"] = imageset_url
+
+
 def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir):
     project_classes = {
         "images": sly.Project,
@@ -169,39 +228,9 @@ def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir
         project_class.download(api, project_id=project_id, dest_dir=temp_dir, batch_size=batch_size)
         download_info["temp_dir_files"] = temp_dir
     elif project_type in ["images"]:
-        imageset_url = api.project.check_imageset_backup(project_id)
-        imageset_url = imageset_url.get("imagesArchiveUrl", None)
-        if imageset_url is None:
-            temp_dir_images = os.path.join(temp_dir, "images")
-            temp_dir_anns = os.path.join(temp_dir, "anns")
-
-            project_class.download(
-                api,
-                project_id=project_id,
-                dest_dir=temp_dir_images,
-                batch_size=batch_size,
-                save_image_info=True,
-            )
-
-            project_class.download(
-                api,
-                project_id=project_id,
-                dest_dir=temp_dir_anns,
-                batch_size=batch_size,
-                save_images=False,
-            )
-            download_info["temp_dir_files"] = temp_dir_images
-            download_info["temp_dir_anns"] = temp_dir_anns
-        else:
-            project_class.download(
-                api,
-                project_id=project_id,
-                dest_dir=temp_dir,
-                batch_size=batch_size,
-                save_images=False,
-            )
-            download_info["temp_dir_anns"] = temp_dir
-        download_info["backup_url"] = imageset_url
+        download_info = download_image_project(
+            api, project_id, project_class, temp_dir, download_info
+        )
     else:
         project_class.download(api, project_id=project_id, dest_dir=temp_dir)
         download_info["temp_dir_files"] = temp_dir
