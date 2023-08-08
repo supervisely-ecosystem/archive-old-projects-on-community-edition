@@ -40,6 +40,14 @@ multiplicity = 4 * MB
 max_archive_size = 348 * GB
 
 
+def sizeof_fmt(num, suffix="B"):
+    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+        if abs(num) < 1024.0:
+            return f"{num:.2f} {unit}{suffix}"
+        num /= 1024.0
+    return f"{num:.2f} Yi{suffix}"
+
+
 def download_env_file():
     initial_team_id = sly.env.team_id()
     team_files_env_file_path = os.environ.get("context.slyFile")
@@ -463,7 +471,7 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, a_typ
 def archive_project(project_id, project_info):
     sly.logger.info(" ")
     sly.logger.info(
-        f"Archiving project [ID: {project_id}] size: {round(int(project_info.size) / GB, 1)} GB"
+        f"Archiving project [ID: {project_id}] size: {sizeof_fmt(int(project_info.size))}"
     )
 
     download_info = download_project_by_type(project_info.type, api, project_id, storage_dir)
@@ -553,17 +561,11 @@ def main():
                             if project_info.workspace_id != workspace_id:
                                 pbar.update(1)
                                 num_of_processed_projects += 1
-                                sly.logger.info(
-                                    f"Processed projects #{num_of_processed_projects} of {num_of_projects}"
-                                )
                                 continue
 
                         if project_info.type not in project_types:
                             pbar.update(1)
                             num_of_processed_projects += 1
-                            sly.logger.info(
-                                f"Processed projects #{num_of_processed_projects} of {num_of_projects}"
-                            )
                             continue
 
                         if exception_counts > 3:
@@ -610,6 +612,7 @@ def main():
         sly.logger.info(f"The next check will be in {sleep_days} day(s)")
 
         if failed_projects:
+            sly.logger.warning("⚠️⚠️⚠️")
             sly.logger.warning(f"FAILED PROJECTS: {failed_projects}")
             sly.logger.warning(f"Check them before the next run!")
 
