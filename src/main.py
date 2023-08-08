@@ -168,8 +168,8 @@ def download_image_project(api: sly.Api, project_id, project_class, temp_dir, do
     image_map, hash_list = create_image_map(project_id)
 
     if imageset_url is None:
-        temp_dir_images = os.path.join(temp_dir, "images")
-        temp_dir_anns = os.path.join(temp_dir, "anns")
+        temp_dir_images = os.path.join(temp_dir, str(project_id) + "_files")
+        temp_dir_anns = os.path.join(temp_dir, str(project_id) + "_annotations")
 
         hash_names = [hash_list[i].replace("/", "-") for i in range(len(hash_list))]
         temp_dir_images_list = [
@@ -191,6 +191,7 @@ def download_image_project(api: sly.Api, project_id, project_class, temp_dir, do
         download_info["temp_dir_files"] = temp_dir_images
         download_info["temp_dir_anns"] = temp_dir_anns
     else:
+        temp_dir += "_annotations"
         project_class.download(
             api,
             project_id=project_id,
@@ -203,6 +204,7 @@ def download_image_project(api: sly.Api, project_id, project_class, temp_dir, do
 
         download_info["temp_dir_anns"] = temp_dir
     download_info["backup_url"] = imageset_url
+    return download_info
 
 
 def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir):
@@ -353,9 +355,9 @@ def upload_archive_volumes(parts, chunk_size, dbx, destination_folder):
 
 
 def upload_to_dropbox(tars_to_upload, project_destination_folder, a_type):
-    destination_folder_for_project = f"{project_destination_folder}/{a_type}"
-    dbx.files_create_folder_v2(destination_folder_for_project)
     if isinstance(tars_to_upload, set):
+        destination_folder_for_project = f"{project_destination_folder}/{a_type}"
+        dbx.files_create_folder_v2(destination_folder_for_project)
         sly.logger.info(f"A nested folder has been created with the name: {a_type}")
         link_to_restore, hash_compare_results = upload_archive_volumes(
             tars_to_upload,
@@ -370,7 +372,7 @@ def upload_to_dropbox(tars_to_upload, project_destination_folder, a_type):
             tars_to_upload,
             chunk_size,
             dbx,
-            destination_folder_for_project,
+            project_destination_folder,
         )
         silent_remove(tars_to_upload)
     return link_to_restore, hash_compare_results
