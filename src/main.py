@@ -608,7 +608,7 @@ def main():
                         )
                         pbar.update(1)
 
-        sly.logger.info("Task accomplished, STANDBY mode activated.")
+        sly.logger.info("🔚 Task accomplished, STANDBY mode activated.")
         sly.logger.info(f"The next check will be in {sleep_days} day(s)")
 
         if failed_projects:
