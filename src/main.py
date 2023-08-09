@@ -1,5 +1,4 @@
 import os, time, random
-from datetime import datetime, timedelta
 from distutils.util import strtobool
 import supervisely as sly
 from supervisely.io.fs import (
@@ -7,6 +6,7 @@ from supervisely.io.fs import (
     remove_dir,
     silent_remove,
     get_directory_size,
+    ensure_base_path,
 )
 from supervisely.io.json import dump_json_file
 from dotenv import load_dotenv
@@ -170,10 +170,24 @@ def create_image_map(project_id):
     return hash_name_map, hash_list
 
 
+def download_images_by_hashes(api: sly.Api, hashes, paths):
+    if len(hashes) == 0:
+        return
+    if len(hashes) != len(paths):
+        raise ValueError('Can not match "hashes" and "paths" lists, len(hashes) != len(paths)')
+
+    h_to_path = {h: path for h, path in zip(hashes, paths)}
+    for h, resp_part in api.image._download_batch_by_hashes(hashes):
+        ensure_base_path(h_to_path[h])
+        with open(h_to_path[h], "wb") as w:
+            w.write(resp_part.content)
+
+
 def download_image_project(api: sly.Api, project_id, project_class, temp_dir, download_info):
     imageset_url = api.project.check_imageset_backup(project_id)
     imageset_url = imageset_url.get("imagesArchiveUrl", None)
     image_map, hash_list = create_image_map(project_id)
+    hash_list = list(set(hash_list))
 
     if imageset_url is None:
         temp_dir_images = os.path.join(temp_dir, str(project_id) + "_files")
@@ -184,7 +198,7 @@ def download_image_project(api: sly.Api, project_id, project_class, temp_dir, do
             os.path.join(temp_dir_images, hash_name) for hash_name in hash_names
         ]
 
-        api.image.download_paths_by_hashes(set(hash_list), temp_dir_images_list)
+        download_images_by_hashes(api, hash_list, temp_dir_images_list)
 
         project_class.download(
             api,
@@ -276,7 +290,7 @@ def create_sly_folder_on_dropbox(dbx: dropbox.Dropbox):
     return folder_path
 
 
-def dropbox_session_upload(archive_path, chunk_size, dbx, destination):
+def dropbox_session_upload(archive_path, chunk_size, dbx: dropbox.Dropbox, destination):
     with open(archive_path, "rb") as archive:
         file_size = os.path.getsize(archive_path)
 
@@ -328,7 +342,7 @@ def dropbox_session_upload(archive_path, chunk_size, dbx, destination):
         return upload_path, hash_compare_results
 
 
-def upload_archive_no_split(archive_path, chunk_size, dbx, destination_folder):
+def upload_archive_no_split(archive_path, chunk_size, dbx: dropbox.Dropbox, destination_folder):
     while True:
         try:
             (
@@ -351,7 +365,7 @@ def upload_archive_no_split(archive_path, chunk_size, dbx, destination_folder):
     return link_to_restore, hash_compare_results
 
 
-def upload_archive_volumes(parts, chunk_size, dbx, destination_folder):
+def upload_archive_volumes(parts, chunk_size, dbx: dropbox.Dropbox, destination_folder):
     sorted_parts = sorted(list(parts))
     hash_compare_results = list()
     for part in sorted_parts:
@@ -449,7 +463,7 @@ def create_destination_folder_on_dropbox(project_id):
     return destination_folder_for_project
 
 
-def get_upload_results(temp_dir, archive_path, project_destination_folder, a_type):
+def get_upload_results(temp_dir, archive_path, project_destination_folder, archive_type):
     if get_directory_size(temp_dir) >= max_archive_size:
         sly.logger.info(
             "The project takes up more space than the data transfer limits allow, so it will be split into several parts and placed in a separate Dropbox project folder."
@@ -463,7 +477,7 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, a_typ
     remove_dir(temp_dir)
 
     link_to_restore, hash_compare_results = upload_to_dropbox(
-        tars_to_upload, project_destination_folder, a_type
+        tars_to_upload, project_destination_folder, archive_type
     )
     return link_to_restore, hash_compare_results
 
@@ -471,7 +485,7 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, a_typ
 def archive_project(project_id, project_info):
     sly.logger.info(" ")
     sly.logger.info(
-        f"Archiving project [ID: {project_id}] size: {sizeof_fmt(int(project_info.size))}"
+        f"Archiving {project_info.type} project [ID: {project_id}] size: {sizeof_fmt(int(project_info.size))}"
     )
 
     download_info = download_project_by_type(project_info.type, api, project_id, storage_dir)
