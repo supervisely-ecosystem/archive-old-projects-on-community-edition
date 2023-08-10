@@ -66,14 +66,22 @@
           ⚠️ All available projects will be archived
         </div>
         <div style="color: #7f858e; font-size: 13px" v-if="state.setRange">
-          Sets the period equal to the number of days from today to the past.
+          Sets the day to define the period in which all projects that have not
+          been updated will be selected:
         </div>
         <div
           style="color: #7f858e; font-size: 13px; margin: 0 0 4px 0"
           v-if="state.setRange"
         >
-          If the project has not been updated during (To) or before (From) this
-          period, it will be added to the list:
+          - "From" option sets a certain day in the past from which the infinite
+          period in the past begins
+        </div>
+        <div
+          style="color: #7f858e; font-size: 13px; margin: 0 0 4px 0"
+          v-if="state.setRange"
+        >
+          - "To" option sets a certain day in the past until which the period
+          lasts, starting from today
         </div>
         <el-checkbox style="margin: 10px 10px 0px 8px" v-model="state.setRange"
           >Set range</el-checkbox
@@ -87,8 +95,8 @@
         </div>
         <div style="margin: 10px 10px 10px 8px" v-if="state.setRange">
           <el-radio-group v-model="state.rangeType">
-            <el-radio-button label="To">To</el-radio-button>
             <el-radio-button label="From">From</el-radio-button>
+            <el-radio-button label="To">To</el-radio-button>
           </el-radio-group>
         </div>
         <el-input-number
