@@ -378,7 +378,8 @@ def upload_archive_volumes(parts, chunk_size, dbx: dropbox.Dropbox, destination_
 
 def upload_to_dropbox(tars_to_upload, project_destination_folder, a_type):
     if isinstance(tars_to_upload, set):
-        destination_folder_for_project = f"{project_destination_folder}/{a_type}"
+        project_id = project_destination_folder.split("/")[-1]
+        destination_folder_for_project = f'{project_destination_folder}/{project_id + "_" + a_type}'
         dbx.files_create_folder_v2(destination_folder_for_project)
         sly.logger.info(f"A nested folder has been created with the name: {a_type}")
         link_to_restore, hash_compare_results = upload_archive_volumes(
