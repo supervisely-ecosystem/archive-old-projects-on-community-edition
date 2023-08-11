@@ -1,2 +1,2 @@
-supervisely==6.72.98
+supervisely==6.72.99
 dropbox==11.36.2
