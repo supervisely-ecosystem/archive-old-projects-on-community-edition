@@ -615,6 +615,7 @@ def main():
                                 f"Skipping project [ID: {project_info.id}]. Archived by App instance with ID: {ar_task_id}"
                             )
                         elif custom_data.get("archivation_status") == "obsolete":
+                            sly.logger.info(" ")
                             sly.logger.info(
                                 f"Skipping project [ID: {project_info.id}]. Archivation is not supported"
                             )
