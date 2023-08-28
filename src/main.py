@@ -163,6 +163,8 @@ def create_image_map(project_id):
         dataset_dict = {"name": dataset.name, "images": []}
         image_list = api.image.get_list(dataset.id)
         for image in image_list:
+            if image.hash is None:
+                continue
             image_dict = {"hash": image.hash, "name": image.name}
             hash_list.append(image.hash)
             dataset_dict["images"].append(image_dict)
@@ -187,6 +189,10 @@ def download_image_project(api: sly.Api, project_id, project_class, temp_dir, do
     imageset_url = api.project.check_imageset_backup(project_id)
     imageset_url = imageset_url.get("imagesArchiveUrl", None)
     image_map, hash_list = create_image_map(project_id)
+
+    if not hash_list:
+        return None
+
     hash_list = list(set(hash_list))
 
     if imageset_url is None:
@@ -490,6 +496,12 @@ def archive_project(project_id, project_info):
     )
 
     download_info = download_project_by_type(project_info.type, api, project_id, storage_dir)
+
+    if download_info is None:
+        raise NothingToBackup(
+            "Impossible to archive this project, because it uses an obsolete file storage mechanism."
+        )
+
     archive_paths = prepare_archive_paths(download_info)
     project_destination_folder = create_destination_folder_on_dropbox(project_id)
 
@@ -547,6 +559,12 @@ class TooManyExceptions(Exception):
         super().__init__(message)
 
 
+class NothingToBackup(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
+
+
 def main():
     while True:
         sort_type, sort_order = choose_sorting()
@@ -596,12 +614,20 @@ def main():
                             sly.logger.info(
                                 f"Skipping project [ID: {project_info.id}]. Archived by App instance with ID: {ar_task_id}"
                             )
+                        elif custom_data.get("archivation_status") == "obsolete":
+                            sly.logger.info(
+                                f"Skipping project [ID: {project_info.id}]. Archivation is not supported"
+                            )
                         else:
                             custom_data["archivation_status"] = "in_progress"
                             custom_data["archivation_task_id"] = task_id
                             api.project.update_custom_data(project_info.id, custom_data)
                             try:
                                 archive_project(project_info.id, project_info)
+                            except NothingToBackup as e:
+                                sly.logger.warning(f"{e}")
+                                custom_data["archivation_status"] = "obsolete"
+                                api.project.update_custom_data(project_info.id, custom_data)
                             except Exception as e:
                                 sly.logger.error(f"{e}")
                                 sly.logger.warning(
