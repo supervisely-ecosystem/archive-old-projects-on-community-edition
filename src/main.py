@@ -497,7 +497,7 @@ def archive_project(project_id, project_info):
 
     download_info = download_project_by_type(project_info.type, api, project_id, storage_dir)
 
-    if download_info is None:
+    if download_info is None and project_info.type == "images":
         raise NothingToBackup(
             "Impossible to archive this project, because it uses an obsolete file storage mechanism."
         )
@@ -627,7 +627,9 @@ def main():
                             except NothingToBackup as e:
                                 sly.logger.warning(f"{e}")
                                 custom_data["archivation_status"] = "obsolete"
+                                custom_data["archivation_task_id"] = task_id
                                 api.project.update_custom_data(project_info.id, custom_data)
+                                exception_happened = True
                             except Exception as e:
                                 sly.logger.error(f"{e}")
                                 sly.logger.warning(
