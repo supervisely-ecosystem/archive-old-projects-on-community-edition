@@ -653,13 +653,16 @@ def main():
                                 exception_happened = process_exception(
                                     e, project_info, custom_data, "internal_server_error"
                                 )
+                                sly.logger.warning(
+                                    f"Skipping project [ID: {project_info.id}]. Archivation is not possible"
+                                )
 
                             except Exception as e:
                                 exception_happened = process_exception(
                                     e, project_info, custom_data, "failed"
                                 )
                                 sly.logger.warning(
-                                    f"Process skipped for project [ID: {project_info.id}]. Status in custom data set to: failed"
+                                    f"Skipping project [ID: {project_info.id}]. Status in custom data set to: failed"
                                 )
                                 failed_projects.append(project_info.id)
                                 exception_counts += 1
