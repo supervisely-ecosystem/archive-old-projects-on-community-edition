@@ -272,15 +272,16 @@ def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir
 def check_full_storage_urls_for_videos(api: sly.Api, project_id):
     dataset_list = api.dataset.get_list(project_id)
     for dataset in dataset_list:
-        video_list = api.image.get_list(dataset.id)
+        video_list = api.video.get_list(dataset.id)
         for video in video_list:
-            if not video.full_storage_url:
+            if not video.path_original:
                 continue
-            response = requests.head(video.full_storage_url)
+            response = requests.head("https://app.supervisely.com" + video.path_original)
             if not response.status_code == 200:
                 raise NothingToBackup(
                     "Impossible to archive this project, because it has videos with broken URLs"
                 )
+    sly.logger.info("Verification of URLs for all videos in project is complete")
 
 
 def create_sly_folder_on_dropbox(dbx: dropbox.Dropbox):
