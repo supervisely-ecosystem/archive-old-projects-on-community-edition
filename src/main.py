@@ -262,9 +262,25 @@ def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir
             api, project_id, project_class, temp_dir, download_info
         )
     else:
+        if project_type in ["videos"]:
+            check_full_storage_urls_for_videos(api, project_id)
         project_class.download(api, project_id=project_id, dest_dir=temp_dir)
         download_info["temp_dir_files"] = temp_dir
     return download_info
+
+
+def check_full_storage_urls_for_videos(api: sly.Api, project_id):
+    dataset_list = api.dataset.get_list(project_id)
+    for dataset in dataset_list:
+        video_list = api.image.get_list(dataset.id)
+        for video in video_list:
+            if not video.full_storage_url:
+                continue
+            response = requests.head(video.full_storage_url)
+            if not response.status_code == 200:
+                raise NothingToBackup(
+                    "Impossible to archive this project, because it has videos with broken URLs"
+                )
 
 
 def create_sly_folder_on_dropbox(dbx: dropbox.Dropbox):
