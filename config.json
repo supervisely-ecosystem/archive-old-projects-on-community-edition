@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "categories": ["system"],
   "description": "Archive old projects on community",
-  "docker_image": "supervisely/system:6.72.99",
+  "docker_image": "supervisely/system:6.72.114",
   "min_instance_version": "6.8.17",
   "main_script": "src/main.py",
   "modal_template": "src/modal.html",

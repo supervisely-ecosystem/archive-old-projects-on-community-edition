@@ -7,6 +7,7 @@ from supervisely.io.fs import (
     silent_remove,
     get_directory_size,
     ensure_base_path,
+    clean_dir,
 )
 from supervisely.io.json import dump_json_file
 from dotenv import load_dotenv
@@ -164,7 +165,9 @@ def create_image_map(project_id):
         image_list = api.image.get_list(dataset.id)
         for image in image_list:
             if image.hash is None:
-                continue
+                raise NothingToBackup(
+                    "Impossible to archive this project, because it has no hashes for some images."
+                )
             image_dict = {"hash": image.hash, "name": image.name}
             hash_list.append(image.hash)
             dataset_dict["images"].append(image_dict)
@@ -189,9 +192,6 @@ def download_image_project(api: sly.Api, project_id, project_class, temp_dir, do
     imageset_url = api.project.check_imageset_backup(project_id)
     imageset_url = imageset_url.get("imagesArchiveUrl", None)
     image_map, hash_list = create_image_map(project_id)
-
-    if not hash_list:
-        return None
 
     hash_list = list(set(hash_list))
 
@@ -262,9 +262,26 @@ def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir
             api, project_id, project_class, temp_dir, download_info
         )
     else:
+        if project_type in ["videos"]:
+            check_full_storage_urls_for_videos(api, project_id)
         project_class.download(api, project_id=project_id, dest_dir=temp_dir)
         download_info["temp_dir_files"] = temp_dir
     return download_info
+
+
+def check_full_storage_urls_for_videos(api: sly.Api, project_id):
+    dataset_list = api.dataset.get_list(project_id)
+    for dataset in dataset_list:
+        video_list = api.video.get_list(dataset.id)
+        for video in video_list:
+            if not video.path_original:
+                continue
+            response = requests.head(api.server_address + video.path_original)
+            if not response.status_code == 200:
+                raise NothingToBackup(
+                    "Impossible to archive this project, because it has videos with broken URLs"
+                )
+    sly.logger.info("Verification of URLs for all videos in project is complete")
 
 
 def create_sly_folder_on_dropbox(dbx: dropbox.Dropbox):
@@ -489,19 +506,14 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, archi
     return link_to_restore, hash_compare_results
 
 
-def archive_project(project_id, project_info):
+def archive_project(project_info: sly.ProjectInfo):
+    project_id = project_info.id
     sly.logger.info(" ")
     sly.logger.info(
         f"Archiving {project_info.type} project [ID: {project_id}] size: {sizeof_fmt(int(project_info.size))}"
     )
 
     download_info = download_project_by_type(project_info.type, api, project_id, storage_dir)
-
-    if download_info is None and project_info.type == "images":
-        raise NothingToBackup(
-            "Impossible to archive this project, because it uses an obsolete file storage mechanism."
-        )
-
     archive_paths = prepare_archive_paths(download_info)
     project_destination_folder = create_destination_folder_on_dropbox(project_id)
 
@@ -547,6 +559,21 @@ def archive_project(project_id, project_info):
         sly.logger.info(f"Uploaded successfully [ID: {project_id}]")
         sly.logger.info(f"Link to restore images: {link_to_restore_files}")
         sly.logger.info(f"Link to restore annotations: {link_to_restore_ann}")
+
+
+def echo_failed_projects(failed_projects):
+    if failed_projects:
+        sly.logger.warning("⚠️⚠️⚠️")
+        sly.logger.warning(f"FAILED PROJECTS: {failed_projects}")
+        sly.logger.warning(f"Check them before the next run!")
+
+
+def process_exception(error, project_info: sly.ProjectInfo, custom_data, archivation_status: str):
+    sly.logger.warning(f"{error}")
+    custom_data["archivation_status"] = archivation_status
+    api.project.update_custom_data(project_info.id, custom_data)
+    exception_happened = True
+    return exception_happened
 
 
 dbx = auth_to_dropbox()
@@ -602,6 +629,7 @@ def main():
                             continue
 
                         if exception_counts > 3:
+                            echo_failed_projects(failed_projects)
                             raise TooManyExceptions(
                                 "The maximum number of missed projects in a row has been reached, apllication is interrupted"
                             )
@@ -614,38 +642,47 @@ def main():
                             sly.logger.info(
                                 f"Skipping project [ID: {project_info.id}]. Archived by App instance with ID: {ar_task_id}"
                             )
-                        elif custom_data.get("archivation_status") == "obsolete":
+                        elif custom_data.get("archivation_status") in (
+                            "obsolete",
+                            "internal_server_error",
+                        ):
                             sly.logger.info(" ")
                             sly.logger.info(
-                                f"Skipping project [ID: {project_info.id}]. Archivation is not supported"
+                                f"Skipping project [ID: {project_info.id}]. Archivation is not possible"
                             )
                         else:
                             custom_data["archivation_status"] = "in_progress"
                             custom_data["archivation_task_id"] = task_id
                             api.project.update_custom_data(project_info.id, custom_data)
                             try:
-                                archive_project(project_info.id, project_info)
+                                archive_project(project_info)
                             except NothingToBackup as e:
-                                sly.logger.warning(f"{e}")
-                                custom_data["archivation_status"] = "obsolete"
-                                custom_data["archivation_task_id"] = task_id
-                                api.project.update_custom_data(project_info.id, custom_data)
-                                exception_happened = True
-                            except Exception as e:
-                                sly.logger.error(f"{e}")
+                                exception_happened = process_exception(
+                                    e, project_info, custom_data, "obsolete"
+                                )
+                            except requests.exceptions.RetryError as e:
+                                exception_happened = process_exception(
+                                    e, project_info, custom_data, "internal_server_error"
+                                )
                                 sly.logger.warning(
-                                    f"Process skipped for project [ID: {project_info.id}]. Status in custom data set to: failed"
+                                    f"Skipping project [ID: {project_info.id}]. Archivation is not possible"
+                                )
+
+                            except Exception as e:
+                                exception_happened = process_exception(
+                                    e, project_info, custom_data, "failed"
+                                )
+                                sly.logger.warning(
+                                    f"Skipping project [ID: {project_info.id}]. Status in custom data set to: failed"
                                 )
                                 failed_projects.append(project_info.id)
-                                custom_data["archivation_status"] = "failed"
-                                api.project.update_custom_data(project_info.id, custom_data)
-                                exception_happened = True
                                 exception_counts += 1
                             if not exception_happened:
                                 exception_counts = 0
                                 custom_data["archivation_status"] = "completed"
                                 api.project.update_custom_data(project_info.id, custom_data)
 
+                        clean_dir(storage_dir)
                         num_of_processed_projects += 1
                         sly.logger.info(
                             f"Processed projects #{num_of_processed_projects} of {num_of_projects}"
@@ -655,10 +692,7 @@ def main():
         sly.logger.info("🔚 Task accomplished, STANDBY mode activated.")
         sly.logger.info(f"The next check will be in {sleep_days} day(s)")
 
-        if failed_projects:
-            sly.logger.warning("⚠️⚠️⚠️")
-            sly.logger.warning(f"FAILED PROJECTS: {failed_projects}")
-            sly.logger.warning(f"Check them before the next run!")
+        echo_failed_projects(failed_projects)
 
         time.sleep(sleep_time)
 
