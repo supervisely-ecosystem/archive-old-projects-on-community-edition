@@ -7,6 +7,7 @@ from supervisely.io.fs import (
     silent_remove,
     get_directory_size,
     ensure_base_path,
+    clean_dir,
 )
 from supervisely.io.json import dump_json_file
 from dotenv import load_dotenv
@@ -549,6 +550,23 @@ def archive_project(project_id, project_info):
         sly.logger.info(f"Link to restore annotations: {link_to_restore_ann}")
 
 
+def echo_failed_projects(failed_projects):
+    if failed_projects:
+        sly.logger.warning("⚠️⚠️⚠️")
+        sly.logger.warning(f"FAILED PROJECTS: {failed_projects}")
+        sly.logger.warning(f"Check them before the next run!")
+
+
+def process_exception(
+    error, project_info: sly.ProjectInfo, custom_data, archivation_status: str, task_id: int
+):
+    sly.logger.warning(f"{error}")
+    custom_data["archivation_status"] = archivation_status
+    api.project.update_custom_data(project_info.id, custom_data)
+    exception_happened = True
+    return exception_happened
+
+
 dbx = auth_to_dropbox()
 destination_folder = create_sly_folder_on_dropbox(dbx)
 
@@ -602,6 +620,7 @@ def main():
                             continue
 
                         if exception_counts > 3:
+                            echo_failed_projects(failed_projects)
                             raise TooManyExceptions(
                                 "The maximum number of missed projects in a row has been reached, apllication is interrupted"
                             )
@@ -614,10 +633,13 @@ def main():
                             sly.logger.info(
                                 f"Skipping project [ID: {project_info.id}]. Archived by App instance with ID: {ar_task_id}"
                             )
-                        elif custom_data.get("archivation_status") == "obsolete":
+                        elif custom_data.get("archivation_status") in (
+                            "obsolete",
+                            "internal_server_error",
+                        ):
                             sly.logger.info(" ")
                             sly.logger.info(
-                                f"Skipping project [ID: {project_info.id}]. Archivation is not supported"
+                                f"Skipping project [ID: {project_info.id}]. Archivation is not possible"
                             )
                         else:
                             custom_data["archivation_status"] = "in_progress"
@@ -626,26 +648,29 @@ def main():
                             try:
                                 archive_project(project_info.id, project_info)
                             except NothingToBackup as e:
-                                sly.logger.warning(f"{e}")
-                                custom_data["archivation_status"] = "obsolete"
-                                custom_data["archivation_task_id"] = task_id
-                                api.project.update_custom_data(project_info.id, custom_data)
-                                exception_happened = True
+                                exception_happened = process_exception(
+                                    e, project_info, custom_data, "obsolete"
+                                )
+                            except requests.exceptions.RetryError as e:
+                                exception_happened = process_exception(
+                                    e, project_info, custom_data, "internal_server_error"
+                                )
+
                             except Exception as e:
-                                sly.logger.error(f"{e}")
+                                exception_happened = process_exception(
+                                    e, project_info, custom_data, "failed"
+                                )
                                 sly.logger.warning(
                                     f"Process skipped for project [ID: {project_info.id}]. Status in custom data set to: failed"
                                 )
                                 failed_projects.append(project_info.id)
-                                custom_data["archivation_status"] = "failed"
-                                api.project.update_custom_data(project_info.id, custom_data)
-                                exception_happened = True
                                 exception_counts += 1
                             if not exception_happened:
                                 exception_counts = 0
                                 custom_data["archivation_status"] = "completed"
                                 api.project.update_custom_data(project_info.id, custom_data)
 
+                        clean_dir(storage_dir)
                         num_of_processed_projects += 1
                         sly.logger.info(
                             f"Processed projects #{num_of_processed_projects} of {num_of_projects}"
@@ -655,10 +680,7 @@ def main():
         sly.logger.info("🔚 Task accomplished, STANDBY mode activated.")
         sly.logger.info(f"The next check will be in {sleep_days} day(s)")
 
-        if failed_projects:
-            sly.logger.warning("⚠️⚠️⚠️")
-            sly.logger.warning(f"FAILED PROJECTS: {failed_projects}")
-            sly.logger.warning(f"Check them before the next run!")
+        echo_failed_projects(failed_projects)
 
         time.sleep(sleep_time)
 
