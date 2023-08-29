@@ -557,9 +557,7 @@ def echo_failed_projects(failed_projects):
         sly.logger.warning(f"Check them before the next run!")
 
 
-def process_exception(
-    error, project_info: sly.ProjectInfo, custom_data, archivation_status: str, task_id: int
-):
+def process_exception(error, project_info: sly.ProjectInfo, custom_data, archivation_status: str):
     sly.logger.warning(f"{error}")
     custom_data["archivation_status"] = archivation_status
     api.project.update_custom_data(project_info.id, custom_data)
