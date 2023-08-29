@@ -276,7 +276,7 @@ def check_full_storage_urls_for_videos(api: sly.Api, project_id):
         for video in video_list:
             if not video.path_original:
                 continue
-            response = requests.head("https://app.supervisely.com" + video.path_original)
+            response = requests.head(api.server_address + video.path_original)
             if not response.status_code == 200:
                 raise NothingToBackup(
                     "Impossible to archive this project, because it has videos with broken URLs"
