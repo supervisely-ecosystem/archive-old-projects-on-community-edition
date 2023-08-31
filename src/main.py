@@ -33,7 +33,8 @@ skip_exported = bool(strtobool(os.environ.get("modal.state.skipExported")))
 sleep_days = int(os.environ.get("modal.state.sleep"))
 batch_size = int(os.environ.get("modal.state.batchSize"))
 sleep_time = sleep_days * 86400
-storage_dir = f"/tmp/{api.task_id}"
+os.chdir("/tmp")
+storage_dir = f"{api.task_id}"
 mkdir(storage_dir)
 sly.logger.info(f"Storage dir: {storage_dir}")
 
