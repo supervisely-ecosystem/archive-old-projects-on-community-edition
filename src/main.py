@@ -8,6 +8,7 @@ from supervisely.io.fs import (
     get_directory_size,
     ensure_base_path,
     clean_dir,
+    mkdir,
 )
 from supervisely.io.json import dump_json_file
 from dotenv import load_dotenv
@@ -32,7 +33,10 @@ skip_exported = bool(strtobool(os.environ.get("modal.state.skipExported")))
 sleep_days = int(os.environ.get("modal.state.sleep"))
 batch_size = int(os.environ.get("modal.state.batchSize"))
 sleep_time = sleep_days * 86400
-storage_dir = sly.app.get_data_dir()
+storage_dir = sly.task.paths.TaskPaths.DEBUG_DIR
+mkdir(storage_dir)
+sly.logger.info(f"Storage dir: {storage_dir}")
+
 
 GB = 1024 * 1024 * 1024
 MB = 1024 * 1024
@@ -628,12 +632,6 @@ def main():
                             num_of_processed_projects += 1
                             continue
 
-                        if exception_counts > 3:
-                            echo_failed_projects(failed_projects)
-                            raise TooManyExceptions(
-                                "The maximum number of missed projects in a row has been reached, apllication is interrupted"
-                            )
-
                         exception_happened = False
                         custom_data = api.project.get_info_by_id(project_info.id).custom_data
                         if custom_data.get("archivation_status") in ("in_progress", "completed"):
@@ -688,6 +686,12 @@ def main():
                             f"Processed projects #{num_of_processed_projects} of {num_of_projects}"
                         )
                         pbar.update(1)
+
+                        if exception_counts > 3:
+                            echo_failed_projects(failed_projects)
+                            raise TooManyExceptions(
+                                "The maximum number of missed projects in a row has been reached, apllication is interrupted"
+                            )
 
         sly.logger.info("🔚 Task accomplished, STANDBY mode activated.")
         sly.logger.info(f"The next check will be in {sleep_days} day(s)")
