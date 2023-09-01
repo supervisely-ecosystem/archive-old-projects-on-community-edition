@@ -606,9 +606,9 @@ def main():
         sort_type, sort_order = choose_sorting()
         project_infos = get_project_infos(sort_type, sort_order)
 
-        start = time.time()
+        start_timer = time.time()
         random.shuffle(project_infos)
-        sly.logger.debug(f"Time for shuffle all the project_infos:  {time.time() - start}")
+        sly.logger.debug(f"Time for shuffle all the project_infos:  {time.time() - start_timer}")
 
         workspace_id = choose_workspace()
         project_types = choose_project_types()
