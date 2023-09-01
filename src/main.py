@@ -274,6 +274,8 @@ def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir
             check_full_storage_urls_for_videos(api, project_id)
         project_class.download(api, project_id=project_id, dest_dir=temp_dir)
         download_info["temp_dir_files"] = temp_dir
+    sly.logger.info("Project downloaded")
+    time.sleep(35)
     return download_info
 
 
