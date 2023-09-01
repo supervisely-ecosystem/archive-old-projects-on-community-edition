@@ -608,7 +608,7 @@ def main():
 
         start = time.time()
         random.shuffle(project_infos)
-        sly.logger.info(f"{time.time() - start}")
+        sly.logger.debug(f"Time for shuffle all the project_infos:  {time.time() - start}")
 
         workspace_id = choose_workspace()
         project_types = choose_project_types()
