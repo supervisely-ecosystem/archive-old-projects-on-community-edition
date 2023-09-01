@@ -271,7 +271,7 @@ def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir
         project_class.download(api, project_id=project_id, dest_dir=temp_dir)
         download_info["temp_dir_files"] = temp_dir
 
-    sly.logger.info("The Project is downloaded.")
+    sly.logger.info("Project is downloaded")
 
     return download_info
 
@@ -505,7 +505,7 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, archi
         archive_directory(temp_dir, archive_path)
         tars_to_upload = archive_path
 
-    sly.logger.info("The files were packed.")
+    sly.logger.info("Files are packed")
 
     remove_dir(temp_dir)
 
@@ -605,6 +605,11 @@ def main():
     while True:
         sort_type, sort_order = choose_sorting()
         project_infos = get_project_infos(sort_type, sort_order)
+
+        start = time.time()
+        random.shuffle(project_infos)
+        sly.logger.info(f"{time.time() - start}")
+
         workspace_id = choose_workspace()
         project_types = choose_project_types()
         task_id = api.task_id
