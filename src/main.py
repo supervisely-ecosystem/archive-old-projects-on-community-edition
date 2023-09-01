@@ -8,6 +8,7 @@ from supervisely.io.fs import (
     get_directory_size,
     ensure_base_path,
     clean_dir,
+    mkdir,
 )
 from supervisely.io.json import dump_json_file
 from dotenv import load_dotenv
@@ -32,7 +33,10 @@ skip_exported = bool(strtobool(os.environ.get("modal.state.skipExported")))
 sleep_days = int(os.environ.get("modal.state.sleep"))
 batch_size = int(os.environ.get("modal.state.batchSize"))
 sleep_time = sleep_days * 86400
-storage_dir = sly.app.get_data_dir()
+
+storage_dir = f"/tmp/{api.task_id}"
+mkdir(storage_dir)
+sly.logger.debug(f"Storage dir: {storage_dir}")
 
 GB = 1024 * 1024 * 1024
 MB = 1024 * 1024
@@ -266,6 +270,9 @@ def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir
             check_full_storage_urls_for_videos(api, project_id)
         project_class.download(api, project_id=project_id, dest_dir=temp_dir)
         download_info["temp_dir_files"] = temp_dir
+
+    sly.logger.info("Project is downloaded")
+
     return download_info
 
 
@@ -498,6 +505,8 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, archi
         archive_directory(temp_dir, archive_path)
         tars_to_upload = archive_path
 
+    sly.logger.info("Files are packed")
+
     remove_dir(temp_dir)
 
     link_to_restore, hash_compare_results = upload_to_dropbox(
@@ -596,6 +605,11 @@ def main():
     while True:
         sort_type, sort_order = choose_sorting()
         project_infos = get_project_infos(sort_type, sort_order)
+
+        start_timer = time.time()
+        random.shuffle(project_infos)
+        sly.logger.debug(f"Time for shuffle all the project_infos:  {time.time() - start_timer}")
+
         workspace_id = choose_workspace()
         project_types = choose_project_types()
         task_id = api.task_id
@@ -627,12 +641,6 @@ def main():
                             pbar.update(1)
                             num_of_processed_projects += 1
                             continue
-
-                        if exception_counts > 3:
-                            echo_failed_projects(failed_projects)
-                            raise TooManyExceptions(
-                                "The maximum number of missed projects in a row has been reached, apllication is interrupted"
-                            )
 
                         exception_happened = False
                         custom_data = api.project.get_info_by_id(project_info.id).custom_data
@@ -688,6 +696,12 @@ def main():
                             f"Processed projects #{num_of_processed_projects} of {num_of_projects}"
                         )
                         pbar.update(1)
+
+                        if exception_counts > 3:
+                            echo_failed_projects(failed_projects)
+                            raise TooManyExceptions(
+                                "The maximum number of missed projects in a row has been reached, apllication is interrupted"
+                            )
 
         sly.logger.info("🔚 Task accomplished, STANDBY mode activated.")
         sly.logger.info(f"The next check will be in {sleep_days} day(s)")
