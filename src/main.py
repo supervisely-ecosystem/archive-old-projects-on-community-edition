@@ -38,10 +38,6 @@ storage_dir = f"/tmp/{api.task_id}"
 mkdir(storage_dir)
 sly.logger.info(f"Storage dir: {storage_dir}")
 
-time.sleep(35)
-
-storage_dir = sly.app.get_data_dir()
-
 GB = 1024 * 1024 * 1024
 MB = 1024 * 1024
 chunk_size = 48 * MB
@@ -274,8 +270,10 @@ def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir
             check_full_storage_urls_for_videos(api, project_id)
         project_class.download(api, project_id=project_id, dest_dir=temp_dir)
         download_info["temp_dir_files"] = temp_dir
-    sly.logger.info("Project downloaded")
-    time.sleep(35)
+
+    sly.logger.info(f"Project downloaded: {temp_dir}")
+    time.sleep(60)
+
     return download_info
 
 
