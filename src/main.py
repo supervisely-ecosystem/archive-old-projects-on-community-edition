@@ -36,7 +36,7 @@ sleep_time = sleep_days * 86400
 
 storage_dir = f"/tmp/{api.task_id}"
 mkdir(storage_dir)
-sly.logger.info(f"Storage dir: {storage_dir}")
+sly.logger.debug(f"Storage dir: {storage_dir}")
 
 GB = 1024 * 1024 * 1024
 MB = 1024 * 1024
@@ -271,8 +271,7 @@ def download_project_by_type(project_type, api: sly.Api, project_id, storage_dir
         project_class.download(api, project_id=project_id, dest_dir=temp_dir)
         download_info["temp_dir_files"] = temp_dir
 
-    sly.logger.info(f"Project downloaded: {temp_dir}")
-    time.sleep(60)
+    sly.logger.info("The Project is downloaded.")
 
     return download_info
 
@@ -506,9 +505,9 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, archi
         archive_directory(temp_dir, archive_path)
         tars_to_upload = archive_path
 
-    remove_dir(temp_dir)
+    sly.logger.info("The files were packed.")
 
-    time.sleep(35)
+    remove_dir(temp_dir)
 
     link_to_restore, hash_compare_results = upload_to_dropbox(
         tars_to_upload, project_destination_folder, archive_type
