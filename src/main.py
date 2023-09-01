@@ -33,11 +33,14 @@ skip_exported = bool(strtobool(os.environ.get("modal.state.skipExported")))
 sleep_days = int(os.environ.get("modal.state.sleep"))
 batch_size = int(os.environ.get("modal.state.batchSize"))
 sleep_time = sleep_days * 86400
-os.chdir("/tmp")
-storage_dir = f"{api.task_id}"
+
+storage_dir = f"/tmp/{api.task_id}"
 mkdir(storage_dir)
 sly.logger.info(f"Storage dir: {storage_dir}")
 
+time.sleep(35)
+
+storage_dir = sly.app.get_data_dir()
 
 GB = 1024 * 1024 * 1024
 MB = 1024 * 1024
@@ -504,6 +507,8 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, archi
         tars_to_upload = archive_path
 
     remove_dir(temp_dir)
+
+    time.sleep(35)
 
     link_to_restore, hash_compare_results = upload_to_dropbox(
         tars_to_upload, project_destination_folder, archive_type
