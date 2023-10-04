@@ -585,6 +585,37 @@ def process_exception(error, project_info: sly.ProjectInfo, custom_data, archiva
     return exception_happened
 
 
+def filter_projects(full_project_info: sly.ProjectInfo):
+    permission = True
+
+    if full_project_info.custom_data.get("archivation_status") in ("in_progress", "completed"):
+        ar_task_id = full_project_info.custom_data.get("archivation_task_id")
+        sly.logger.info(" ")
+        sly.logger.info(
+            f"Skipping project [ID: {full_project_info.id}]. Archived by App instance with ID: {ar_task_id}"
+        )
+        permission = False
+    elif full_project_info.custom_data.get("archivation_status") in (
+        "obsolete",
+        "internal_server_error",
+    ):
+        sly.logger.info(" ")
+        sly.logger.info(
+            f"Skipping project [ID: {full_project_info.id}]. Archivation is not possible"
+        )
+        permission = False
+    elif full_project_info.type == "images":
+        if full_project_info.images_count == 0 or full_project_info.images_count is None:
+            sly.logger.info(" ")
+            sly.logger.info(
+                f"Skipping project [ID: {full_project_info.id}]. This project doesn't have images"
+            )
+            full_project_info.custom_data["archivation_status"] = "obsolete"
+            api.project.update_custom_data(full_project_info.id, full_project_info.custom_data)
+            permission = False
+    return permission
+
+
 dbx = auth_to_dropbox()
 destination_folder = create_sly_folder_on_dropbox(dbx)
 
@@ -606,10 +637,6 @@ def main():
         sort_type, sort_order = choose_sorting()
         project_infos = get_project_infos(sort_type, sort_order)
 
-        start_timer = time.time()
-        random.shuffle(project_infos)
-        sly.logger.debug(f"Time for shuffle all the project_infos:  {time.time() - start_timer}")
-
         workspace_id = choose_workspace()
         project_types = choose_project_types()
         task_id = api.task_id
@@ -618,7 +645,7 @@ def main():
         exception_counts = 0
         failed_projects = []
 
-        slice_size = 10
+        slice_size = 100
         num_slices = (num_of_projects + slice_size - 1) // slice_size
 
         if num_of_projects != 0:
@@ -643,34 +670,27 @@ def main():
                             continue
 
                         exception_happened = False
-                        custom_data = api.project.get_info_by_id(project_info.id).custom_data
-                        if custom_data.get("archivation_status") in ("in_progress", "completed"):
-                            ar_task_id = custom_data.get("archivation_task_id")
-                            sly.logger.info(" ")
-                            sly.logger.info(
-                                f"Skipping project [ID: {project_info.id}]. Archived by App instance with ID: {ar_task_id}"
+                        full_project_info = api.project.get_info_by_id(project_info.id)
+                        permission = filter_projects(full_project_info)
+
+                        if permission:
+                            full_project_info.custom_data["archivation_status"] = "in_progress"
+                            full_project_info.custom_data["archivation_task_id"] = task_id
+                            api.project.update_custom_data(
+                                project_info.id, full_project_info.custom_data
                             )
-                        elif custom_data.get("archivation_status") in (
-                            "obsolete",
-                            "internal_server_error",
-                        ):
-                            sly.logger.info(" ")
-                            sly.logger.info(
-                                f"Skipping project [ID: {project_info.id}]. Archivation is not possible"
-                            )
-                        else:
-                            custom_data["archivation_status"] = "in_progress"
-                            custom_data["archivation_task_id"] = task_id
-                            api.project.update_custom_data(project_info.id, custom_data)
                             try:
                                 archive_project(project_info)
                             except NothingToBackup as e:
                                 exception_happened = process_exception(
-                                    e, project_info, custom_data, "obsolete"
+                                    e, project_info, full_project_info.custom_data, "obsolete"
                                 )
                             except requests.exceptions.RetryError as e:
                                 exception_happened = process_exception(
-                                    e, project_info, custom_data, "internal_server_error"
+                                    e,
+                                    project_info,
+                                    full_project_info.custom_data,
+                                    "internal_server_error",
                                 )
                                 sly.logger.warning(
                                     f"Skipping project [ID: {project_info.id}]. Archivation is not possible"
@@ -678,7 +698,7 @@ def main():
 
                             except Exception as e:
                                 exception_happened = process_exception(
-                                    e, project_info, custom_data, "failed"
+                                    e, project_info, full_project_info.custom_data, "failed"
                                 )
                                 sly.logger.warning(
                                     f"Skipping project [ID: {project_info.id}]. Status in custom data set to: failed"
@@ -687,8 +707,10 @@ def main():
                                 exception_counts += 1
                             if not exception_happened:
                                 exception_counts = 0
-                                custom_data["archivation_status"] = "completed"
-                                api.project.update_custom_data(project_info.id, custom_data)
+                                full_project_info.custom_data["archivation_status"] = "completed"
+                                api.project.update_custom_data(
+                                    project_info.id, full_project_info.custom_data
+                                )
 
                         clean_dir(storage_dir)
                         num_of_processed_projects += 1
