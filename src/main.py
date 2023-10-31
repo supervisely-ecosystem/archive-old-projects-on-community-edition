@@ -172,6 +172,10 @@ def create_image_map(project_id):
                 raise NothingToBackup(
                     "Impossible to archive this project, because it has no hashes for some images."
                 )
+            if image.link is not None:
+                raise NothingToBackup(
+                    "This project contains remote images, archiving is not reasonable."
+                )
             image_dict = {"hash": image.hash, "name": image.name}
             hash_list.append(image.hash)
             dataset_dict["images"].append(image_dict)
