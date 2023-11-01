@@ -182,12 +182,13 @@ def create_image_map(project_id):
                 continue
             if image.hash is None:
                 raise NothingToBackup(
-                    "Impossible to archive this project, because it has no hashes for some images."
+                    f"Impossible to archive this project, because it has no hash for '{image.name}' ."
                 )
             image_dict = {"hash": image.hash, "name": image.name}
             hash_list.append(image.hash)
             dataset_dict["images"].append(image_dict)
-        hash_name_map["datasets"].append(dataset_dict)
+        if dataset_dict.get("images"):
+            hash_name_map["datasets"].append(dataset_dict)
     return hash_name_map, hash_list, links_map
 
 
@@ -236,24 +237,27 @@ def download_images_by_links(image_map: Dict, links_map: Dict, temp_dir_images: 
 
 
 def download_image_project(api: sly.Api, project_id, project_class, temp_dir, download_info):
+    temp_dir_images = os.path.join(temp_dir, str(project_id) + "_files")
+    temp_dir_anns = os.path.join(temp_dir, str(project_id) + "_annotations")
     imageset_url = api.project.check_imageset_backup(project_id)
     imageset_url = imageset_url.get("imagesArchiveUrl", None)
     image_map, hash_list, links_map = create_image_map(project_id)
 
+    if len(image_map.get("datasets")) == 0:
+        raise NothingToBackup("Project does not contain images stored on the instance")
+
+    if links_map:
+        image_map = download_images_by_links(image_map, links_map, temp_dir_images)
+
     hash_list = list(set(hash_list))
 
     if imageset_url is None:
-        temp_dir_images = os.path.join(temp_dir, str(project_id) + "_files")
-        temp_dir_anns = os.path.join(temp_dir, str(project_id) + "_annotations")
-
         hash_names = [hash_list[i].replace("/", "-") for i in range(len(hash_list))]
         temp_dir_images_list = [
             os.path.join(temp_dir_images, hash_name) for hash_name in hash_names
         ]
 
         download_images_by_hashes(api, hash_list, temp_dir_images_list)
-        if links_map:
-            image_map = download_images_by_links(image_map, links_map, temp_dir_images)
 
         project_class.download(
             api,
