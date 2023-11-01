@@ -1,6 +1,10 @@
 import os, time, random
-from distutils.util import strtobool
+import dropbox
+import requests
 import supervisely as sly
+from dotenv import load_dotenv
+from typing import Dict
+from distutils.util import strtobool
 from supervisely.io.fs import (
     archive_directory,
     remove_dir,
@@ -9,11 +13,10 @@ from supervisely.io.fs import (
     ensure_base_path,
     clean_dir,
     mkdir,
+    get_file_hash,
+    dir_exists,
 )
 from supervisely.io.json import dump_json_file
-from dotenv import load_dotenv
-import dropbox
-import requests
 from dropbox_content_hasher import StreamHasher, DropboxContentHasher
 
 
@@ -163,24 +166,29 @@ def get_project_infos(sort_type, sort_order):
 def create_image_map(project_id):
     hash_name_map = {"datasets": []}
     hash_list = []
+    links_map = {}
     dataset_list = api.dataset.get_list(project_id)
     for dataset in dataset_list:
         dataset_dict = {"name": dataset.name, "images": []}
         image_list = api.image.get_list(dataset.id)
         for image in image_list:
+            if image.link is not None:
+                link_dict = {dataset.name: [{"link": image.link, "name": image.name}]}
+                for key, value in link_dict.items():
+                    if key in links_map:
+                        links_map[key].extend(value)
+                    else:
+                        links_map[key] = value
+                continue
             if image.hash is None:
                 raise NothingToBackup(
                     "Impossible to archive this project, because it has no hashes for some images."
-                )
-            if image.link is not None:
-                raise NothingToBackup(
-                    "This project contains remote images, archiving is not reasonable."
                 )
             image_dict = {"hash": image.hash, "name": image.name}
             hash_list.append(image.hash)
             dataset_dict["images"].append(image_dict)
         hash_name_map["datasets"].append(dataset_dict)
-    return hash_name_map, hash_list
+    return hash_name_map, hash_list, links_map
 
 
 def download_images_by_hashes(api: sly.Api, hashes, paths):
@@ -196,10 +204,41 @@ def download_images_by_hashes(api: sly.Api, hashes, paths):
             w.write(resp_part.content)
 
 
+def download_images_by_links(image_map: Dict, links_map: Dict, temp_dir_images: str):
+    if not dir_exists(temp_dir_images):
+        mkdir(temp_dir_images)
+    for dataset, links in links_map.items():
+        temp_list = []
+        for link in links:
+            # download image
+            response = requests.get(link.get("link"))
+            if response.status_code == 200:
+                image_data = response.content
+                file_name = link.get("name")
+                file_path = os.path.join(temp_dir_images, file_name)
+                with open(file_path, "wb") as image_file:
+                    image_file.write(image_data)
+                # get hash
+                image_hash = get_file_hash(file_path)
+                # rename file
+                new_name = image_hash.replace("/", "-")
+                os.rename(file_path, os.path.join(os.path.dirname(file_path), new_name))
+                # update image_map dataset with temp_list
+                temp_list.append({"hash": image_hash, "name": file_name})
+        for json_ds in image_map.get("datasets"):
+            if json_ds.get("name") == dataset:
+                json_ds.get("images").extend(temp_list)
+                break
+        else:
+            new_dataset = {"name": dataset, "images": temp_list}
+            image_map["datasets"].append(new_dataset)
+    return image_map
+
+
 def download_image_project(api: sly.Api, project_id, project_class, temp_dir, download_info):
     imageset_url = api.project.check_imageset_backup(project_id)
     imageset_url = imageset_url.get("imagesArchiveUrl", None)
-    image_map, hash_list = create_image_map(project_id)
+    image_map, hash_list, links_map = create_image_map(project_id)
 
     hash_list = list(set(hash_list))
 
@@ -213,6 +252,8 @@ def download_image_project(api: sly.Api, project_id, project_class, temp_dir, do
         ]
 
         download_images_by_hashes(api, hash_list, temp_dir_images_list)
+        if links_map:
+            image_map = download_images_by_links(image_map, links_map, temp_dir_images)
 
         project_class.download(
             api,
