@@ -1,24 +1,30 @@
-import os, time, random
+import os
+import random
+import tarfile
+import time
+from datetime import datetime
+from distutils.util import strtobool
+from typing import Dict
+
 import dropbox
 import requests
 import supervisely as sly
 from dotenv import load_dotenv
-from typing import Dict
-from distutils.util import strtobool
 from supervisely.io.fs import (
     archive_directory,
+    clean_dir,
+    dir_exists,
+    ensure_base_path,
+    get_directory_size,
+    get_file_hash,
+    mkdir,
     remove_dir,
     silent_remove,
-    get_directory_size,
-    ensure_base_path,
-    clean_dir,
-    mkdir,
-    get_file_hash,
-    dir_exists,
 )
 from supervisely.io.json import dump_json_file
-from dropbox_content_hasher import StreamHasher, DropboxContentHasher
+from tqdm import tqdm
 
+from dropbox_content_hasher import DropboxContentHasher, StreamHasher
 
 if sly.is_development():
     load_dotenv("local.env")
@@ -46,6 +52,18 @@ MB = 1024 * 1024
 chunk_size = 48 * MB
 multiplicity = 4 * MB
 max_archive_size = 348 * GB
+
+
+class TooManyExceptions(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
+
+
+class NothingToBackup(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
 
 
 def sizeof_fmt(num, suffix="B"):
@@ -512,7 +530,7 @@ def set_project_archived(
             )
 
 
-def prepare_archive_paths(download_info):
+def prepare_archive_paths(download_info: dict) -> dict:
     archive_paths = {"files": None, "annotations": None}
     if download_info["project_type"] != "images":
         archive_paths["files"] = [
@@ -553,6 +571,8 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, archi
     else:
         archive_directory(temp_dir, archive_path)
         tars_to_upload = archive_path
+
+    compare_folder_with_archive_structure(tars_to_upload, temp_dir)
 
     sly.logger.info("Files are packed")
 
@@ -629,6 +649,7 @@ def echo_failed_projects(failed_projects):
 def process_exception(error, project_info: sly.ProjectInfo, custom_data, archivation_status: str):
     sly.logger.warning(f"{error}")
     custom_data["archivation_status"] = archivation_status
+    custom_data["archivation_timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     api.project.update_custom_data(project_info.id, custom_data)
     exception_happened = True
     return exception_happened
@@ -665,20 +686,41 @@ def filter_projects(full_project_info: sly.ProjectInfo):
     return permission
 
 
+def get_initial_dir_structure(folder: str) -> list:
+    structure = {}
+    for dirpath, _, filenames in os.walk(folder):
+        dirpath = dirpath.replace(folder, "")
+        if dirpath.startswith("/"):
+            dirpath = dirpath[1:]
+        for file in filenames:
+            file_path = os.path.join(dirpath, file)
+            structure[file_path] = None
+    return structure
+
+
+def build_dir_structure_from_archives(archive_list: list) -> dict:
+    combined_structure = {}
+    if isinstance(archive_list, str):
+        archive_list = [archive_list]
+    for archive in archive_list:
+        with tarfile.open(archive, "r") as tar:
+            for member in tar.getmembers():
+                if member.isfile():
+                    combined_structure[member.path] = None
+    return combined_structure
+
+
+def compare_folder_with_archive_structure(archive_paths: list, folder: str):
+    folder_structure = get_initial_dir_structure(folder)
+    combined_structure = build_dir_structure_from_archives(archive_paths)
+    if not combined_structure == folder_structure:
+        raise FileNotFoundError(
+            "Archive structure does not correspond to the structure of the directory being archived"
+        )
+
+
 dbx = auth_to_dropbox()
 destination_folder = create_sly_folder_on_dropbox(dbx)
-
-
-class TooManyExceptions(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(message)
-
-
-class NothingToBackup(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(message)
 
 
 def main():
@@ -698,7 +740,7 @@ def main():
         num_slices = (num_of_projects + slice_size - 1) // slice_size
 
         if num_of_projects != 0:
-            with sly.tqdm_sly(total=num_of_projects, desc="Archiving projects") as pbar:
+            with tqdm(total=num_of_projects, desc="Archiving projects") as pbar:
                 for i in range(num_slices):
                     start = i * slice_size
                     end = start + slice_size
@@ -725,6 +767,9 @@ def main():
                         if permission:
                             full_project_info.custom_data["archivation_status"] = "in_progress"
                             full_project_info.custom_data["archivation_task_id"] = task_id
+                            full_project_info.custom_data[
+                                "archivation_timestamp"
+                            ] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
                             api.project.update_custom_data(
                                 project_info.id, full_project_info.custom_data
                             )
@@ -757,6 +802,9 @@ def main():
                             if not exception_happened:
                                 exception_counts = 0
                                 full_project_info.custom_data["archivation_status"] = "completed"
+                                full_project_info.custom_data[
+                                    "archivation_timestamp"
+                                ] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
                                 api.project.update_custom_data(
                                     project_info.id, full_project_info.custom_data
                                 )
