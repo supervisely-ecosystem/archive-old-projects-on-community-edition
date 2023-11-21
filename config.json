@@ -5,7 +5,7 @@
   "categories": ["system"],
   "restart_policy": "on_error",
   "description": "Archive old projects on community",
-  "docker_image": "supervisely/system:6.72.151",
+  "docker_image": "supervisely/system:6.72.195",
   "min_instance_version": "6.8.17",
   "main_script": "src/main.py",
   "modal_template": "src/modal.html",
