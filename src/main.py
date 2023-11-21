@@ -4,7 +4,7 @@ import tarfile
 import time
 from datetime import datetime
 from distutils.util import strtobool
-from typing import Dict
+from typing import Dict, Union
 
 import dropbox
 import requests
@@ -51,7 +51,8 @@ GB = 1024 * 1024 * 1024
 MB = 1024 * 1024
 chunk_size = 48 * MB
 multiplicity = 4 * MB
-max_archive_size = 348 * GB
+max_archive_size = 5 * MB
+free_space_coeff = 2.2
 
 
 class TooManyExceptions(Exception):
@@ -572,7 +573,13 @@ def get_upload_results(temp_dir, archive_path, project_destination_folder, archi
         archive_directory(temp_dir, archive_path)
         tars_to_upload = archive_path
 
-    compare_folder_with_archive_structure(tars_to_upload, temp_dir)
+    free_disk_space = get_free_disk_space(temp_dir)
+    if isinstance(tars_to_upload, set) and max_archive_size * free_space_coeff > free_disk_space:
+        sly.logger.warning(
+            "The archive structure was not checked, because there is not enough free space on the hard disk to process this operation."
+        )
+    else:
+        compare_folder_with_archive_structure(tars_to_upload, temp_dir)
 
     sly.logger.info("Files are packed")
 
@@ -698,25 +705,45 @@ def get_initial_dir_structure(folder: str) -> list:
     return structure
 
 
-def build_dir_structure_from_archives(archive_list: list) -> dict:
+def build_dir_structure_from_archives(archives: Union[str, set], folder: str) -> dict:
     combined_structure = {}
-    if isinstance(archive_list, str):
-        archive_list = [archive_list]
-    for archive in archive_list:
-        with tarfile.open(archive, "r") as tar:
+    output_path = None
+    # if archived in parts, x2 disk space is required for the following operations
+    if isinstance(archives, set):
+        archives = sorted(archives)
+        output_path = os.path.join(os.path.dirname(folder), "temp_arch_structure_check.tar")
+        with open(output_path, "wb") as output_file:
+            for part_path in archives:
+                with open(part_path, "rb") as part_file:
+                    data = part_file.read()
+                    output_file.write(data)
+        archives = output_path
+    # if there is only one archive
+    if isinstance(archives, str):
+        with tarfile.open(archives, "r") as tar:
             for member in tar.getmembers():
                 if member.isfile():
                     combined_structure[member.path] = None
+    else:
+        raise FileNotFoundError("Unable to find archive file to check the structure")
+    if output_path is not None:
+        silent_remove(output_path)
     return combined_structure
 
 
 def compare_folder_with_archive_structure(archive_paths: list, folder: str):
     folder_structure = get_initial_dir_structure(folder)
-    combined_structure = build_dir_structure_from_archives(archive_paths)
+    combined_structure = build_dir_structure_from_archives(archive_paths, folder)
     if not combined_structure == folder_structure:
         raise FileNotFoundError(
             "Archive structure does not correspond to the structure of the directory being archived"
         )
+
+
+def get_free_disk_space(folder):
+    stat = os.statvfs(folder)
+    free_space = stat.f_bsize * stat.f_bavail
+    return free_space
 
 
 dbx = auth_to_dropbox()
