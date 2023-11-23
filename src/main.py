@@ -20,6 +20,7 @@ from supervisely.io.fs import (
     mkdir,
     remove_dir,
     silent_remove,
+    file_exists,
 )
 from supervisely.io.json import dump_json_file
 from tqdm import tqdm
@@ -242,7 +243,9 @@ def download_images_by_links(image_map: Dict, links_map: Dict, temp_dir_images: 
                 image_hash = get_file_hash(file_path)
                 # rename file
                 new_name = image_hash.replace("/", "-")
-                os.rename(file_path, os.path.join(os.path.dirname(file_path), new_name))
+                new_path = os.path.join(os.path.dirname(file_path), new_name)
+                os.rename(file_path, new_path)
+                check_downloaded_files([new_path])
                 # update image_map dataset with temp_list
                 temp_list.append({"hash": image_hash, "name": file_name})
         for json_ds in image_map.get("datasets"):
@@ -253,6 +256,12 @@ def download_images_by_links(image_map: Dict, links_map: Dict, temp_dir_images: 
             new_dataset = {"name": dataset, "images": temp_list}
             image_map["datasets"].append(new_dataset)
     return image_map
+
+
+def check_downloaded_files(paths):
+    for path in paths:
+        if not file_exists(path):
+            raise FileNotFoundError(f"Downloaded file does not exist: {path}")
 
 
 def download_image_project(api: sly.Api, project_id, project_class, temp_dir, download_info):
@@ -277,6 +286,7 @@ def download_image_project(api: sly.Api, project_id, project_class, temp_dir, do
         ]
 
         download_images_by_hashes(api, hash_list, temp_dir_images_list)
+        check_downloaded_files(temp_dir_images_list)
 
         project_class.download(
             api,
