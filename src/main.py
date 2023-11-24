@@ -52,7 +52,7 @@ GB = 1024 * 1024 * 1024
 MB = 1024 * 1024
 chunk_size = 48 * MB
 multiplicity = 4 * MB
-max_archive_size = 5 * MB
+max_archive_size = 348 * GB
 free_space_coeff = 2.2
 
 
