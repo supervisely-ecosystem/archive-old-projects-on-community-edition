@@ -2,7 +2,7 @@ import os
 import random
 import tarfile
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from distutils.util import strtobool
 from typing import Dict, Union
 
@@ -15,12 +15,12 @@ from supervisely.io.fs import (
     clean_dir,
     dir_exists,
     ensure_base_path,
+    file_exists,
     get_directory_size,
     get_file_hash,
     mkdir,
     remove_dir,
     silent_remove,
-    file_exists,
 )
 from supervisely.io.json import dump_json_file
 from tqdm import tqdm
@@ -42,6 +42,7 @@ range_days = int(os.environ.get("modal.state.rangeDay"))
 skip_exported = bool(strtobool(os.environ.get("modal.state.skipExported")))
 sleep_days = int(os.environ.get("modal.state.sleep"))
 batch_size = int(os.environ.get("modal.state.batchSize"))
+stop = bool(strtobool(os.environ.get("modal.state.stop")))
 sleep_time = sleep_days * 86400
 
 storage_dir = f"/tmp/{api.task_id}"
@@ -858,13 +859,18 @@ def main():
                             raise TooManyExceptions(
                                 "The maximum number of missed projects in a row has been reached, apllication is interrupted"
                             )
-
-        sly.logger.info("🔚 Task accomplished, STANDBY mode activated.")
-        sly.logger.info(f"The next check will be in {sleep_days} day(s)")
-
-        echo_failed_projects(failed_projects)
-
-        time.sleep(sleep_time)
+        if stop:
+            sly.logger.info("🔚 Task accomplished.")
+            echo_failed_projects(failed_projects)
+            break
+        else:
+            next_run = (datetime.utcnow() + timedelta(seconds=sleep_time)).strftime(
+                "%Y-%m-%d %H:%M:%S UTC+0"
+            )
+            sly.logger.info("🔚 Task accomplished, 'Sleep' mode activated.")
+            sly.logger.info(f"The next iterations will start on {next_run}")
+            echo_failed_projects(failed_projects)
+            time.sleep(sleep_time)
 
 
 if __name__ == "__main__":

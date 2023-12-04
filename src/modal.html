@@ -2,8 +2,8 @@
   <sly-card>
     <div style="margin: 10px 10px 0 0">
       <sly-field
-        title="Select workspace"
-        description="For which you want to archive projects"
+        title="Select Workspace"
+        description="Whose projects you want to archive"
         style="margin: 6px 10px 0x 0"
       >
         <sly-select-team-workspace
@@ -20,7 +20,7 @@
       </sly-field>
 
       <sly-field
-        title="Choose project type"
+        title="Choose Project Type"
         description="Several types can be selected"
         style="margin: 6px 10px 0x 0"
       >
@@ -44,9 +44,10 @@
       </sly-field>
 
       <sly-field
-        title="Sleep time"
-        description="Please set the number of days to pause before the next archiving run:"
+        title="Sleep Time"
+        description="Set the number of days the application will wait for the next cleaning iteration after the current one is complete"
         style="margin: 16px 10px 10px 0"
+        v-if="!state.stop"
       >
         <el-input-number
           style="margin: 0 0 0 8px"
@@ -109,7 +110,12 @@
         ></el-input-number>
       </sly-field>
 
-      <sly-field title="Advanced options" style="margin: 16px 10px 10px 0">
+      <sly-field title="Advanced Settings" style="margin: 16px 10px 10px 0">
+        <div>
+          <el-checkbox style="margin: 10px 10px 0 8px" v-model="state.stop"
+            >One-time task</el-checkbox
+          >
+        </div>
         <el-checkbox
           style="margin: 10px 10px 0 8px"
           v-model="state.skipExported"

@@ -16,6 +16,7 @@
     "batchSize": 10,
     "skipExported": true,
     "sleep": 2,
+    "stop": false,
     "allWorkspaces": false,
     "allPTypes": true,
     "defSort": true,
